@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>NEXA Safety - Incident Input</title>
+</head>
+<body>
+
+<h2>NEXA SAFETY - Incident Reporting</h2>
+
+<form id="incidentForm">
+    <input type="date" id="date" required><br><br>
+    <input type="text" id="location" placeholder="Location"><br><br>
+    <input type="text" id="department" placeholder="Department"><br><br>
+    
+    <select id="severity">
+        <option>Low</option>
+        <option>Medium</option>
+        <option>High</option>
+    </select><br><br>
+
+    <textarea id="description" placeholder="Description"></textarea><br><br>
+
+    <button type="submit">Submit</button>
+</form>
+
+<script>
+document.getElementById('incidentForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const data = {
+        date: document.getElementById('date').value,
+        location: document.getElementById('location').value,
+        department: document.getElementById('department').value,
+        severity: document.getElementById('severity').value,
+        description: document.getElementById('description').value
+    };
+
+    await fetch('http://localhost:3000/add-incident', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+    });
+
+    alert('Incident submitted!');
+});
+</script>
+
+</body>
+</html>

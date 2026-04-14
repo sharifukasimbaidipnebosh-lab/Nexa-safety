@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>NEXA SAFETY - Dashboard</title>
+
+    <style>
+        body {
+            font-family: Arial;
+            background: #0f172a;
+            color: white;
+            padding: 20px;
+        }
+
+        h1 {
+            color: #38bdf8;
+        }
+
+        #stats {
+            background: #1e293b;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .card {
+            background: #1e293b;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 10px;
+        }
+
+        hr {
+            border: 0.5px solid #334155;
+        }
+
+        button.logout {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            padding: 10px 15px;
+            background: red;
+            color: white;
+            border: none;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>✈️ NEXA SAFETY SaaS Dashboard</h1>
+
+    <!-- LOGOUT BUTTON -->
+    <button class="logout" onclick="logout()">Logout</button>
+
+    <!-- KPI STATS -->
+    <div id="stats"></div>
+
+    <!-- RISK ENGINE OUTPUT -->
+    <div id="riskContainer"></div>
+
+    <!-- APP SCRIPT -->
+    <script src="app.js"></script>
+
+</body>
+
+</html>

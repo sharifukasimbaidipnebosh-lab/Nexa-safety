@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>NEXA SAFETY - Login</title>
+
+    <style>
+        body {
+            font-family: Arial;
+            background: #0f172a;
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        .box {
+            background: #1e293b;
+            padding: 30px;
+            border-radius: 10px;
+            width: 300px;
+        }
+
+        input {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            box-sizing: border-box;
+            background: #334155;
+            border: none;
+            border-radius: 5px;
+            color: white;
+        }
+
+        button {
+            width: 100%;
+            padding: 10px;
+            background: #38bdf8;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            border-radius: 5px;
+            margin-top: 10px;
+        }
+
+        button:hover {
+            background: #0ea5e9;
+        }
+
+        #msg {
+            margin-top: 15px;
+            text-align: center;
+            color: #fca5a5;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="box">
+    <h2>✈️ NEXA SAFETY LOGIN</h2>
+
+    <input type="email" id="email" placeholder="Email">
+    <input type="password" id="password" placeholder="Password">
+    <input type="text" id="tenant" placeholder="Tenant ID">
+
+    <button onclick="login()">Login</button>
+
+    <p id="msg"></p>
+</div>
+
+<script>
+async function login() {
+
+    const email = document.getElementById("email").value;
+    const password = document.getElementById("password").value;
+    const tenantId = document.getElementById("tenant").value;
+
+    const res = await fetch("/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password, tenantId })
+    });
+
+    const data = await res.json();
+
+    if (data.token) {
+
+        localStorage.setItem("token", data.token);
+        localStorage.setItem("tenantId", data.tenantId);
+
+        window.location.href = "dashboard.html";
+
+    } else {
+        document.getElementById("msg").innerText = "Login failed";
+    }
+}
+</script>
+
+</body>
+</html>

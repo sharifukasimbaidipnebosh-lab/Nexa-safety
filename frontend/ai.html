@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>NEXA AI</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="nav">
+    <a href="dashboard.html">Dashboard</a>
+    <a href="heatmap.html">Heatmap</a>
+    <a href="ai.html">AI</a>
+</div>
+
+<h2>🧠 Predictive AI Engine</h2>
+
+<div id="ai" class="card">Loading AI insights...</div>
+
+<script src="app.js"></script>
+
+<script>
+async function loadAI() {
+    try {
+        const data = await getData("/predict-risk");
+
+        let html = "<h3>Predictions</h3>";
+
+        data.predictions.forEach(p => {
+            html += `
+                <p>
+                    📍 ${p.location} → 
+                    <b>${p.prediction}</b>
+                    (Score: ${p.probability})
+                </p>
+            `;
+        });
+
+        document.getElementById("ai").innerHTML = html;
+    } catch (error) {
+        console.error("Error loading AI predictions:", error);
+        document.getElementById("ai").innerHTML = "<p>Error loading AI insights. Please try again.</p>";
+    }
+}
+
+loadAI();
+setInterval(loadAI, 5000);
+</script>
+
+</body>
+</html>
