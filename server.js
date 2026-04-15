@@ -27,21 +27,58 @@ app.use(express.static(path.join(__dirname, "frontend")));
 /* =========================
    DATABASE (RAILWAY POSTGRES)
 ========================= */
+
+// Validate DATABASE_URL is present before attempting any connection
+if (!process.env.DATABASE_URL) {
+    console.error("WARNING: DATABASE_URL is not set. Database features will be unavailable until it is provided.");
+} else {
+    // Log a masked version of the URL to aid connection debugging
+    const maskedUrl = process.env.DATABASE_URL.replace(/:\/\/([^:]+):([^@]+)@/, "://<user>:<password>@");
+    console.log("DATABASE_URL resolved:", maskedUrl);
+}
+
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: process.env.DATABASE_URL && process.env.DATABASE_URL.includes("railway")
         ? { rejectUnauthorized: false }
-        : false
+        : false,
+    // Prevent the pool from crashing the process on idle client errors
+    max: 10,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 5000
 });
 
-pool.connect((err, client, release) => {
-    if (err) {
-        console.error("DB CONNECTION ERROR:", err.message);
-    } else {
-        console.log("DATABASE CONNECTED");
-        release();
-    }
+// Catch errors emitted on idle pool clients so they never reach the
+// uncaughtException handler and crash the process.
+pool.on("error", (err) => {
+    console.error("DB POOL ERROR (non-fatal):", err.message);
 });
+
+// Attempt an initial connection in the background — startup is not blocked
+// and a failure here will not prevent the HTTP server from coming up.
+function attemptDBConnection(retries = 5, delayMs = 3000) {
+    if (!process.env.DATABASE_URL) {
+        console.warn("Skipping DB connection attempt: DATABASE_URL not set.");
+        return;
+    }
+
+    pool.connect((err, client, release) => {
+        if (err) {
+            console.error(`DB CONNECTION ERROR (${retries} retries left): ${err.message}`);
+            if (retries > 0) {
+                console.log(`Retrying DB connection in ${delayMs / 1000}s...`);
+                setTimeout(() => attemptDBConnection(retries - 1, delayMs), delayMs);
+            } else {
+                console.error("DB connection failed after all retries. App will continue without a live DB connection.");
+            }
+        } else {
+            console.log("DATABASE CONNECTED");
+            release();
+            // Run table initialisation only after a successful connection
+            initDB();
+        }
+    });
+}
 
 /* =========================
    AUTO TABLE CREATION
@@ -79,8 +116,6 @@ async function initDB() {
         console.error("TABLE INIT ERROR:", err.message);
     }
 }
-
-initDB();
 
 /* =========================
    VALIDATION
@@ -283,6 +318,9 @@ app.get("/health", (req, res) => {
 ========================= */
 const PORT = process.env.PORT || 3000;
 
+// Start the HTTP server first so Railway health checks pass immediately,
+// then attempt the DB connection in the background with automatic retries.
 app.listen(PORT, () => {
     console.log("🚀 NEXA SAFETY SaaS running on port", PORT);
+    attemptDBConnection();
 });
