@@ -310,17 +310,36 @@ app.get("/", (req, res) => {
    HEALTH CHECK (RAILWAY SAFE)
 ========================= */
 app.get("/health", (req, res) => {
-    res.json({ status: "OK", system: "NEXA SAFETY" });
+    res.json({
+        status: "OK",
+        system: "NEXA SAFETY",
+        port: process.env.PORT ? parseInt(process.env.PORT, 10) : 3000,
+        uptime: process.uptime()
+    });
+});
+
+/* =========================
+   GLOBAL EXPRESS ERROR HANDLER
+========================= */
+// Must be defined after all routes so Express treats it as an error handler.
+app.use((err, req, res, next) => {
+    console.error("EXPRESS ERROR HANDLER:", err);
+    res.status(500).json({ error: "Internal server error" });
 });
 
 /* =========================
    SERVER START (RAILWAY FIXED)
 ========================= */
-const PORT = process.env.PORT || 3000;
+// Railway injects PORT=8080 at runtime. We honour that value explicitly so
+// the app always binds to the port the public domain is configured for.
+// Fallback to 3000 for local development where PORT is not set.
+const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+
+console.log(`PORT env: ${process.env.PORT ?? "(not set)"} → binding to ${PORT}`);
 
 // Start the HTTP server first so Railway health checks pass immediately,
 // then attempt the DB connection in the background with automatic retries.
-app.listen(PORT, () => {
-    console.log("🚀 NEXA SAFETY SaaS running on port", PORT);
+app.listen(PORT, "0.0.0.0", () => {
+    console.log(`🚀 NEXA SAFETY SaaS listening on 0.0.0.0:${PORT}`);
     attemptDBConnection();
 });
