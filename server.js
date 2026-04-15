@@ -6,18 +6,44 @@ const crypto = require("crypto");
 
 const app = express();
 
+/* =========================
+   GLOBAL ERROR SAFETY
+========================= */
+process.on("uncaughtException", (err) => {
+    console.error("UNCAUGHT EXCEPTION:", err);
+});
+
+process.on("unhandledRejection", (err) => {
+    console.error("UNHANDLED REJECTION:", err);
+});
+
+/* =========================
+   MIDDLEWARE
+========================= */
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "frontend")));
 
-// =========================
-// DATABASE
-// =========================
-const db = new sqlite3.Database("./nexa.db");
+/* =========================
+   DATABASE (RAILWAY SAFE)
+========================= */
+let db;
 
-// =========================
-// CREATE TABLES (AUTO SETUP)
-// =========================
+try {
+    db = new sqlite3.Database("./nexa.db", (err) => {
+        if (err) {
+            console.error("DB ERROR:", err.message);
+        } else {
+            console.log("DATABASE CONNECTED");
+        }
+    });
+} catch (err) {
+    console.error("DB INIT FAILED:", err);
+}
+
+/* =========================
+   AUTO TABLE CREATION
+========================= */
 db.serialize(() => {
 
     db.run(`
@@ -36,11 +62,20 @@ db.serialize(() => {
             email TEXT
         )
     `);
+
+    db.run(`
+        CREATE TABLE IF NOT EXISTS incidents (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tenantId TEXT,
+            severity TEXT,
+            location TEXT
+        )
+    `);
 });
 
-// =========================
-// VALIDATION LAYER
-// =========================
+/* =========================
+   VALIDATION
+========================= */
 function isValidSeverity(severity) {
     return ["Low", "Medium", "High"].includes(severity);
 }
@@ -49,9 +84,9 @@ function safeString(value, fallback = "Unknown") {
     return value ? value.toString().trim() : fallback;
 }
 
-// =========================
-// AUTH MIDDLEWARE
-// =========================
+/* =========================
+   AUTH MIDDLEWARE
+========================= */
 function auth(req, res, next) {
 
     const token = req.headers["authorization"];
@@ -75,12 +110,16 @@ function auth(req, res, next) {
     );
 }
 
-// =========================
-// REGISTER USER (SaaS USER CREATION)
-// =========================
+/* =========================
+   REGISTER
+========================= */
 app.post("/register", (req, res) => {
 
     const { email, password, tenantId } = req.body;
+
+    if (!email || !password || !tenantId) {
+        return res.status(400).json({ error: "Missing fields" });
+    }
 
     db.run(
         "INSERT INTO users (email, password, tenantId) VALUES (?, ?, ?)",
@@ -88,7 +127,7 @@ app.post("/register", (req, res) => {
         function (err) {
 
             if (err) {
-                return res.json({ error: "User already exists" });
+                return res.status(400).json({ error: "User already exists" });
             }
 
             res.json({ message: "User created successfully" });
@@ -96,9 +135,9 @@ app.post("/register", (req, res) => {
     );
 });
 
-// =========================
-// LOGIN SYSTEM
-// =========================
+/* =========================
+   LOGIN
+========================= */
 app.post("/login", (req, res) => {
 
     const { email, password } = req.body;
@@ -128,9 +167,9 @@ app.post("/login", (req, res) => {
     );
 });
 
-// =========================
-// DASHBOARD (PROTECTED)
-// =========================
+/* =========================
+   DASHBOARD (PROTECTED)
+========================= */
 app.get("/dashboard", auth, (req, res) => {
 
     const tenant = req.user.tenantId;
@@ -140,7 +179,7 @@ app.get("/dashboard", auth, (req, res) => {
         [tenant],
         (err, rows) => {
 
-            if (err) return res.json(err);
+            if (err) return res.status(500).json({ error: err.message });
 
             const clean = rows.filter(r => isValidSeverity(r.severity));
 
@@ -154,9 +193,9 @@ app.get("/dashboard", auth, (req, res) => {
     );
 });
 
-// =========================
-// RISK ANALYSIS (PROTECTED)
-// =========================
+/* =========================
+   RISK ANALYSIS (SAFE ENGINE)
+========================= */
 app.get("/risk-analysis", auth, (req, res) => {
 
     const tenant = req.user.tenantId;
@@ -166,7 +205,7 @@ app.get("/risk-analysis", auth, (req, res) => {
         [tenant],
         (err, rows) => {
 
-            if (err) return res.json(err);
+            if (err) return res.status(500).json({ error: err.message });
 
             const results = rows
                 .filter(r => isValidSeverity(r.severity))
@@ -210,16 +249,25 @@ app.get("/risk-analysis", auth, (req, res) => {
     );
 });
 
-// =========================
-// ROOT
-// =========================
+/* =========================
+   ROOT
+========================= */
 app.get("/", (req, res) => {
     res.send("✈️ NEXA SAFETY LOGIN SYSTEM RUNNING");
 });
 
-// =========================
-// SERVER START
-// =========================
-app.listen(3000, () => {
-    console.log("🚀 NEXA SAFETY SaaS running on http://localhost:3000");
+/* =========================
+   HEALTH CHECK (RAILWAY SAFE)
+========================= */
+app.get("/health", (req, res) => {
+    res.json({ status: "OK", system: "NEXA SAFETY" });
+});
+
+/* =========================
+   SERVER START (RAILWAY FIXED)
+========================= */
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, () => {
+    console.log("🚀 NEXA SAFETY SaaS running on port", PORT);
 });
