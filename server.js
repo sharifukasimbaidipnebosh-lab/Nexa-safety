@@ -1,5 +1,5 @@
 const express = require("express");
-const sqlite3 = require("sqlite3").verbose();
+const { Pool } = require("pg");
 const cors = require("cors");
 const path = require("path");
 const crypto = require("crypto");
@@ -25,53 +25,62 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, "frontend")));
 
 /* =========================
-   DATABASE (RAILWAY SAFE)
+   DATABASE (RAILWAY POSTGRES)
 ========================= */
-let db;
+const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: process.env.DATABASE_URL && process.env.DATABASE_URL.includes("railway")
+        ? { rejectUnauthorized: false }
+        : false
+});
 
-try {
-    db = new sqlite3.Database("./nexa.db", (err) => {
-        if (err) {
-            console.error("DB ERROR:", err.message);
-        } else {
-            console.log("DATABASE CONNECTED");
-        }
-    });
-} catch (err) {
-    console.error("DB INIT FAILED:", err);
-}
+pool.connect((err, client, release) => {
+    if (err) {
+        console.error("DB CONNECTION ERROR:", err.message);
+    } else {
+        console.log("DATABASE CONNECTED");
+        release();
+    }
+});
 
 /* =========================
    AUTO TABLE CREATION
 ========================= */
-db.serialize(() => {
+async function initDB() {
+    try {
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS users (
+                id SERIAL PRIMARY KEY,
+                email TEXT UNIQUE,
+                password TEXT,
+                "tenantId" TEXT
+            )
+        `);
 
-    db.run(`
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            email TEXT UNIQUE,
-            password TEXT,
-            tenantId TEXT
-        )
-    `);
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS sessions (
+                token TEXT PRIMARY KEY,
+                "tenantId" TEXT,
+                email TEXT
+            )
+        `);
 
-    db.run(`
-        CREATE TABLE IF NOT EXISTS sessions (
-            token TEXT PRIMARY KEY,
-            tenantId TEXT,
-            email TEXT
-        )
-    `);
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS incidents (
+                id SERIAL PRIMARY KEY,
+                "tenantId" TEXT,
+                severity TEXT,
+                location TEXT
+            )
+        `);
 
-    db.run(`
-        CREATE TABLE IF NOT EXISTS incidents (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            tenantId TEXT,
-            severity TEXT,
-            location TEXT
-        )
-    `);
-});
+        console.log("TABLES READY");
+    } catch (err) {
+        console.error("TABLE INIT ERROR:", err.message);
+    }
+}
+
+initDB();
 
 /* =========================
    VALIDATION
@@ -87,7 +96,7 @@ function safeString(value, fallback = "Unknown") {
 /* =========================
    AUTH MIDDLEWARE
 ========================= */
-function auth(req, res, next) {
+async function auth(req, res, next) {
 
     const token = req.headers["authorization"];
 
@@ -95,25 +104,29 @@ function auth(req, res, next) {
         return res.status(401).json({ error: "No token provided" });
     }
 
-    db.get(
-        "SELECT * FROM sessions WHERE token = ?",
-        [token],
-        (err, session) => {
+    try {
+        const result = await pool.query(
+            "SELECT * FROM sessions WHERE token = $1",
+            [token]
+        );
 
-            if (err || !session) {
-                return res.status(401).json({ error: "Invalid session" });
-            }
+        const session = result.rows[0];
 
-            req.user = session;
-            next();
+        if (!session) {
+            return res.status(401).json({ error: "Invalid session" });
         }
-    );
+
+        req.user = session;
+        next();
+    } catch (err) {
+        return res.status(401).json({ error: "Invalid session" });
+    }
 }
 
 /* =========================
    REGISTER
 ========================= */
-app.post("/register", (req, res) => {
+app.post("/register", async (req, res) => {
 
     const { email, password, tenantId } = req.body;
 
@@ -121,132 +134,134 @@ app.post("/register", (req, res) => {
         return res.status(400).json({ error: "Missing fields" });
     }
 
-    db.run(
-        "INSERT INTO users (email, password, tenantId) VALUES (?, ?, ?)",
-        [email, password, tenantId],
-        function (err) {
+    try {
+        await pool.query(
+            "INSERT INTO users (email, password, \"tenantId\") VALUES ($1, $2, $3)",
+            [email, password, tenantId]
+        );
 
-            if (err) {
-                return res.status(400).json({ error: "User already exists" });
-            }
-
-            res.json({ message: "User created successfully" });
-        }
-    );
+        res.json({ message: "User created successfully" });
+    } catch (err) {
+        res.status(400).json({ error: "User already exists" });
+    }
 });
 
 /* =========================
    LOGIN
 ========================= */
-app.post("/login", (req, res) => {
+app.post("/login", async (req, res) => {
 
     const { email, password } = req.body;
 
-    db.get(
-        "SELECT * FROM users WHERE email = ? AND password = ?",
-        [email, password],
-        (err, user) => {
+    try {
+        const result = await pool.query(
+            "SELECT * FROM users WHERE email = $1 AND password = $2",
+            [email, password]
+        );
 
-            if (err || !user) {
-                return res.status(401).json({ error: "Invalid credentials" });
-            }
+        const user = result.rows[0];
 
-            const token = crypto.randomBytes(32).toString("hex");
-
-            db.run(
-                "INSERT INTO sessions (token, tenantId, email) VALUES (?, ?, ?)",
-                [token, user.tenantId, user.email]
-            );
-
-            res.json({
-                message: "Login successful",
-                token,
-                tenantId: user.tenantId
-            });
+        if (!user) {
+            return res.status(401).json({ error: "Invalid credentials" });
         }
-    );
+
+        const token = crypto.randomBytes(32).toString("hex");
+
+        await pool.query(
+            "INSERT INTO sessions (token, \"tenantId\", email) VALUES ($1, $2, $3)",
+            [token, user.tenantId, user.email]
+        );
+
+        res.json({
+            message: "Login successful",
+            token,
+            tenantId: user.tenantId
+        });
+    } catch (err) {
+        res.status(500).json({ error: "Login failed" });
+    }
 });
 
 /* =========================
    DASHBOARD (PROTECTED)
 ========================= */
-app.get("/dashboard", auth, (req, res) => {
+app.get("/dashboard", auth, async (req, res) => {
 
     const tenant = req.user.tenantId;
 
-    db.all(
-        "SELECT * FROM incidents WHERE tenantId = ?",
-        [tenant],
-        (err, rows) => {
+    try {
+        const result = await pool.query(
+            "SELECT * FROM incidents WHERE \"tenantId\" = $1",
+            [tenant]
+        );
 
-            if (err) return res.status(500).json({ error: err.message });
+        const clean = result.rows.filter(r => isValidSeverity(r.severity));
 
-            const clean = rows.filter(r => isValidSeverity(r.severity));
-
-            res.json({
-                total: clean.length,
-                high: clean.filter(r => r.severity === "High").length,
-                medium: clean.filter(r => r.severity === "Medium").length,
-                low: clean.filter(r => r.severity === "Low").length
-            });
-        }
-    );
+        res.json({
+            total: clean.length,
+            high: clean.filter(r => r.severity === "High").length,
+            medium: clean.filter(r => r.severity === "Medium").length,
+            low: clean.filter(r => r.severity === "Low").length
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
 /* =========================
    RISK ANALYSIS (SAFE ENGINE)
 ========================= */
-app.get("/risk-analysis", auth, (req, res) => {
+app.get("/risk-analysis", auth, async (req, res) => {
 
     const tenant = req.user.tenantId;
 
-    db.all(
-        "SELECT * FROM incidents WHERE tenantId = ?",
-        [tenant],
-        (err, rows) => {
+    try {
+        const result = await pool.query(
+            "SELECT * FROM incidents WHERE \"tenantId\" = $1",
+            [tenant]
+        );
 
-            if (err) return res.status(500).json({ error: err.message });
+        const results = result.rows
+            .filter(r => isValidSeverity(r.severity))
+            .map(r => {
 
-            const results = rows
-                .filter(r => isValidSeverity(r.severity))
-                .map(r => {
+                let severityScore =
+                    r.severity === "High" ? 5 :
+                    r.severity === "Medium" ? 3 : 1;
 
-                    let severityScore =
-                        r.severity === "High" ? 5 :
-                        r.severity === "Medium" ? 3 : 1;
+                let locationScore = 2;
+                if (r.location?.includes("Runway")) locationScore = 5;
+                if (r.location?.includes("Ramp")) locationScore = 4;
 
-                    let locationScore = 2;
-                    if (r.location?.includes("Runway")) locationScore = 5;
-                    if (r.location?.includes("Ramp")) locationScore = 4;
+                let departmentScore = 3;
 
-                    let departmentScore = 3;
+                let riskIndex =
+                    (severityScore * locationScore * departmentScore) / 4;
 
-                    let riskIndex =
-                        (severityScore * locationScore * departmentScore) / 4;
+                let aiBoost = 0;
+                if (r.severity === "High") aiBoost += 1;
+                if (r.location?.includes("Runway")) aiBoost += 2;
 
-                    let aiBoost = 0;
-                    if (r.severity === "High") aiBoost += 1;
-                    if (r.location?.includes("Runway")) aiBoost += 2;
+                let predictedRisk = riskIndex + aiBoost;
 
-                    let predictedRisk = riskIndex + aiBoost;
+                let level = "LOW";
+                if (predictedRisk > 20) level = "INTOLERABLE";
+                else if (predictedRisk > 12) level = "HIGH";
+                else if (predictedRisk > 6) level = "MEDIUM";
 
-                    let level = "LOW";
-                    if (predictedRisk > 20) level = "INTOLERABLE";
-                    else if (predictedRisk > 12) level = "HIGH";
-                    else if (predictedRisk > 6) level = "MEDIUM";
+                return {
+                    location: safeString(r.location),
+                    severity: r.severity,
+                    riskIndex: riskIndex.toFixed(2),
+                    predictedRisk: predictedRisk.toFixed(2),
+                    level
+                };
+            });
 
-                    return {
-                        location: safeString(r.location),
-                        severity: r.severity,
-                        riskIndex: riskIndex.toFixed(2),
-                        predictedRisk: predictedRisk.toFixed(2),
-                        level
-                    };
-                });
-
-            res.json(results);
-        }
-    );
+        res.json(results);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
 /* =========================
