@@ -7,7 +7,7 @@ const crypto = require("crypto");
 const app = express();
 
 /* =========================
-   GLOBAL ERROR SAFETY
+   GLOBAL SAFETY NET
 ========================= */
 process.on("uncaughtException", (err) => {
     console.error("UNCAUGHT EXCEPTION:", err);
@@ -25,31 +25,26 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, "frontend")));
 
 /* =========================
-   DATABASE (POSTGRES)
+   DATABASE (POSTGRES RAILWAY)
 ========================= */
 let pool = null;
 
-if (!process.env.DATABASE_URL) {
-    console.warn("⚠️ DATABASE_URL not set. Running WITHOUT DB.");
-} else {
-    const maskedUrl = process.env.DATABASE_URL.replace(/:\/\/([^:]+):([^@]+)@/, "://<user>:<password>@");
-    console.log("DATABASE_URL:", maskedUrl);
-
+if (process.env.DATABASE_URL) {
     pool = new Pool({
         connectionString: process.env.DATABASE_URL,
         ssl: { rejectUnauthorized: false },
-        max: 10,
-        idleTimeoutMillis: 30000,
-        connectionTimeoutMillis: 5000
+        max: 10
     });
 
     pool.on("error", (err) => {
         console.error("DB POOL ERROR:", err.message);
     });
+} else {
+    console.warn("⚠️ DATABASE_URL not set - running without DB");
 }
 
 /* =========================
-   INIT DB
+   INIT DATABASE TABLES
 ========================= */
 async function initDB() {
     if (!pool) return;
@@ -67,8 +62,8 @@ async function initDB() {
         await pool.query(`
             CREATE TABLE IF NOT EXISTS sessions (
                 token TEXT PRIMARY KEY,
-                "tenantId" TEXT,
-                email TEXT
+                email TEXT,
+                "tenantId" TEXT
             )
         `);
 
@@ -81,29 +76,28 @@ async function initDB() {
             )
         `);
 
-        console.log("✅ TABLES READY");
+        console.log("✅ DATABASE TABLES READY");
     } catch (err) {
-        console.error("TABLE INIT ERROR:", err.message);
+        console.error("DB INIT ERROR:", err.message);
     }
 }
 
 /* =========================
-   VALIDATION
+   HELPERS
 ========================= */
 function isValidSeverity(severity) {
     return ["Low", "Medium", "High"].includes(severity);
 }
 
-function safeString(value, fallback = "Unknown") {
-    return value ? value.toString().trim() : fallback;
+function safeString(v, fallback = "Unknown") {
+    return v ? v.toString() : fallback;
 }
 
 /* =========================
-   AUTH
+   AUTH MIDDLEWARE
 ========================= */
 async function auth(req, res, next) {
-
-    if (!pool) return res.status(500).json({ error: "Database unavailable" });
+    if (!pool) return res.status(500).json({ error: "DB not ready" });
 
     const token = req.headers["authorization"];
     if (!token) return res.status(401).json({ error: "No token" });
@@ -120,8 +114,9 @@ async function auth(req, res, next) {
 
         req.user = result.rows[0];
         next();
+
     } catch (err) {
-        res.status(500).json({ error: "Auth failed" });
+        return res.status(500).json({ error: "Auth error" });
     }
 }
 
@@ -129,8 +124,7 @@ async function auth(req, res, next) {
    REGISTER
 ========================= */
 app.post("/register", async (req, res) => {
-
-    if (!pool) return res.status(500).json({ error: "Database unavailable" });
+    if (!pool) return res.status(500).json({ error: "DB not ready" });
 
     const { email, password, tenantId } = req.body;
 
@@ -141,6 +135,7 @@ app.post("/register", async (req, res) => {
         );
 
         res.json({ message: "User created" });
+
     } catch {
         res.status(400).json({ error: "User exists" });
     }
@@ -150,31 +145,30 @@ app.post("/register", async (req, res) => {
    LOGIN
 ========================= */
 app.post("/login", async (req, res) => {
-
-    if (!pool) return res.status(500).json({ error: "Database unavailable" });
+    if (!pool) return res.status(500).json({ error: "DB not ready" });
 
     const { email, password } = req.body;
 
     try {
         const result = await pool.query(
-            "SELECT * FROM users WHERE email = $1 AND password = $2",
+            "SELECT * FROM users WHERE email=$1 AND password=$2",
             [email, password]
         );
 
         const user = result.rows[0];
 
-        if (!user) return res.status(401).json({ error: "Invalid credentials" });
+        if (!user) return res.status(401).json({ error: "Invalid login" });
 
         const token = crypto.randomBytes(32).toString("hex");
 
         await pool.query(
-            `INSERT INTO sessions (token, "tenantId", email) VALUES ($1, $2, $3)`,
-            [token, user.tenantId, user.email]
+            `INSERT INTO sessions (token, email, "tenantId") VALUES ($1, $2, $3)`,
+            [token, user.email, user.tenantId]
         );
 
         res.json({ token, tenantId: user.tenantId });
 
-    } catch {
+    } catch (err) {
         res.status(500).json({ error: "Login failed" });
     }
 });
@@ -183,10 +177,9 @@ app.post("/login", async (req, res) => {
    DASHBOARD
 ========================= */
 app.get("/dashboard", auth, async (req, res) => {
-
     try {
         const result = await pool.query(
-            `SELECT * FROM incidents WHERE "tenantId" = $1`,
+            `SELECT * FROM incidents WHERE "tenantId"=$1`,
             [req.user.tenantId]
         );
 
@@ -205,31 +198,85 @@ app.get("/dashboard", auth, async (req, res) => {
 });
 
 /* =========================
-   ROOT + HEALTH
+   RISK ANALYSIS
 ========================= */
-app.get("/", (req, res) => {
-    res.send("✈️ NEXA SAFETY LIVE");
-});
+app.get("/risk-analysis", auth, async (req, res) => {
+    try {
+        const result = await pool.query(
+            `SELECT * FROM incidents WHERE "tenantId"=$1`,
+            [req.user.tenantId]
+        );
 
-app.get("/health", (req, res) => {
-    res.json({ status: "OK", uptime: process.uptime() });
+        const output = result.rows.map(r => {
+
+            let severityScore =
+                r.severity === "High" ? 5 :
+                r.severity === "Medium" ? 3 : 1;
+
+            let locationScore = 2;
+            if (r.location?.includes("Runway")) locationScore = 5;
+            if (r.location?.includes("Ramp")) locationScore = 4;
+
+            let riskIndex = (severityScore * locationScore * 3) / 4;
+
+            let predicted = riskIndex +
+                (r.severity === "High" ? 1 : 0) +
+                (r.location?.includes("Runway") ? 2 : 0);
+
+            let level = "LOW";
+            if (predicted > 20) level = "INTOLERABLE";
+            else if (predicted > 12) level = "HIGH";
+            else if (predicted > 6) level = "MEDIUM";
+
+            return {
+                location: safeString(r.location),
+                severity: r.severity,
+                riskIndex: riskIndex.toFixed(2),
+                predictedRisk: predicted.toFixed(2),
+                level
+            };
+        });
+
+        res.json(output);
+
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
 /* =========================
-   START SERVER
+   ROOT
+========================= */
+app.get("/", (req, res) => {
+    res.send("✈️ NEXA SAFETY SYSTEM LIVE");
+});
+
+/* =========================
+   HEALTH CHECK (RAILWAY)
+========================= */
+app.get("/health", (req, res) => {
+    res.json({
+        status: "OK",
+        uptime: process.uptime()
+    });
+});
+
+/* =========================
+   START SERVER (CRITICAL FIX)
 ========================= */
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, "0.0.0.0", async () => {
-    console.log(`🚀 Running on port ${PORT}`);
+    console.log(`🚀 Server running on ${PORT}`);
 
     if (pool) {
         try {
-            await pool.connect();
+            const client = await pool.connect();
             console.log("✅ DATABASE CONNECTED");
+            client.release();
             await initDB();
         } catch (err) {
-            console.error("DB INIT FAILED:", err.message);
+            console.error("DB CONNECTION FAILED:", err.message);
         }
     }
 });
