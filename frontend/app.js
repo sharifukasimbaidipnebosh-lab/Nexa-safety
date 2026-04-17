@@ -37,17 +37,9 @@ function logout() {
 // =========================
 async function safeFetch(endpoint) {
     try {
-        const res = await fetch(`${BASE_URL}${endpoint}`, {
-            method: "GET",
+        const res = await fetch(BASE_URL + endpoint, {
             headers
         });
-
-        // Handle auth failure properly
-        if (res.status === 401) {
-            console.warn("Session expired. Redirecting...");
-            logout();
-            return null;
-        }
 
         if (!res.ok) {
             throw new Error(`HTTP ${res.status}`);
@@ -60,7 +52,6 @@ async function safeFetch(endpoint) {
         return null;
     }
 }
-
 // =========================
 // LOAD DASHBOARD
 // =========================
