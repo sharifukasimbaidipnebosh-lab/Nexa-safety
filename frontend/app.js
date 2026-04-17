@@ -1,5 +1,10 @@
 // =========================
-// SECURITY CHECK (MUST BE FIRST)
+// BASE URL (CRITICAL FIX)
+// =========================
+const BASE_URL = "https://nexa-safety-production.up.railway.app";
+
+// =========================
+// SECURITY CHECK
 // =========================
 const token = localStorage.getItem("token");
 
@@ -7,8 +12,11 @@ if (!token) {
     window.location.href = "login.html";
 }
 
+// Debug (remove later)
+console.log("TOKEN:", token);
+
 // =========================
-// SAFE HEADERS
+// HEADERS
 // =========================
 const headers = {
     "Content-Type": "application/json",
@@ -25,38 +33,53 @@ function logout() {
 }
 
 // =========================
-// SAFE FETCH WRAPPER
+// SAFE FETCH (IMPROVED)
 // =========================
-async function safeFetch(url) {
+async function safeFetch(endpoint) {
     try {
-        const res = await fetch(url, { headers });
+        const res = await fetch(`${BASE_URL}${endpoint}`, {
+            method: "GET",
+            headers
+        });
+
+        // Handle auth failure properly
+        if (res.status === 401) {
+            console.warn("Session expired. Redirecting...");
+            logout();
+            return null;
+        }
 
         if (!res.ok) {
-            throw new Error(`HTTP error ${res.status}`);
+            throw new Error(`HTTP ${res.status}`);
         }
 
         return await res.json();
 
     } catch (err) {
-        console.error("API Error:", url, err);
+        console.error("API ERROR:", endpoint, err);
         return null;
     }
 }
 
 // =========================
-// LOAD DASHBOARD STATS
+// LOAD DASHBOARD
 // =========================
 async function loadDashboard() {
+
+    const el = document.getElementById("stats");
+
+    if (!el) return;
+
+    el.innerHTML = "Loading dashboard...";
 
     const data = await safeFetch("/dashboard");
 
     if (!data) {
-        document.getElementById("stats").innerHTML =
-            "<p style='color:red'>Failed to load dashboard</p>";
+        el.innerHTML = "<p style='color:red'>Failed to load dashboard</p>";
         return;
     }
 
-    document.getElementById("stats").innerHTML = `
+    el.innerHTML = `
         <h3>📊 Total Incidents: ${data.total}</h3>
         <p>🔴 High: ${data.high}</p>
         <p>🟠 Medium: ${data.medium}</p>
@@ -69,11 +92,21 @@ async function loadDashboard() {
 // =========================
 async function loadRiskAnalysis() {
 
+    const el = document.getElementById("riskContainer");
+
+    if (!el) return;
+
+    el.innerHTML = "Loading risk analysis...";
+
     const data = await safeFetch("/risk-analysis");
 
     if (!data) {
-        document.getElementById("riskContainer").innerHTML =
-            "<p style='color:red'>Failed to load risk analysis</p>";
+        el.innerHTML = "<p style='color:red'>Failed to load risk analysis</p>";
+        return;
+    }
+
+    if (!Array.isArray(data) || data.length === 0) {
+        el.innerHTML = "<p>No incidents found</p>";
         return;
     }
 
@@ -81,39 +114,42 @@ async function loadRiskAnalysis() {
 
     data.forEach(item => {
 
-        // Risk level styling (future UI upgrade ready)
-        let levelClass = "";
-        if (item.level === "HIGH") levelClass = "level-high";
-        if (item.level === "MEDIUM") levelClass = "level-medium";
-        if (item.level === "LOW") levelClass = "level-low";
+        let levelColor = "#22c55e"; // LOW
+        if (item.level === "MEDIUM") levelColor = "#f59e0b";
+        if (item.level === "HIGH") levelColor = "#ef4444";
+        if (item.level === "INTOLERABLE") levelColor = "#dc2626";
 
         html += `
-            <div class="card ${levelClass}">
+            <div class="card" style="border-left: 5px solid ${levelColor}">
                 <p><b>📍 Location:</b> ${item.location}</p>
                 <p><b>⚠ Severity:</b> ${item.severity}</p>
                 <p><b>📊 Risk Index:</b> ${item.riskIndex}</p>
                 <p><b>🔮 Predicted Risk:</b> ${item.predictedRisk}</p>
                 <p><b>🚦 Level:</b> ${item.level}</p>
             </div>
+            <hr/>
         `;
     });
 
-    document.getElementById("riskContainer").innerHTML = html;
+    el.innerHTML = html;
 }
 
 // =========================
-// AUTO REFRESH SYSTEM (SAAS FEATURE)
+// INIT (SMART START)
 // =========================
 async function init() {
+
+    console.log("🚀 NEXA Dashboard Initializing...");
+
     await loadDashboard();
     await loadRiskAnalysis();
 
-    // refresh every 60 seconds (real SaaS behavior)
+    // Auto refresh (SaaS behaviour)
     setInterval(loadDashboard, 60000);
     setInterval(loadRiskAnalysis, 60000);
 }
 
 // =========================
-// START APP
+// START
 // =========================
 init();
