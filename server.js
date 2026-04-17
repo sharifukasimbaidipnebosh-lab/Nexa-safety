@@ -14,82 +14,97 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, "frontend")));
 
 /* =========================
-   DATABASE
+   DATABASE (SAFE RAILWAY MODE)
 ========================= */
-const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl: { rejectUnauthorized: false }
-});
+let pool = null;
 
-pool.connect()
-    .then(client => {
-        console.log("✅ DATABASE CONNECTED");
-        client.release();
-        initDB();
-    })
-    .catch(err => {
-        console.error("❌ DB ERROR:", err.message);
+if (process.env.DATABASE_URL) {
+    pool = new Pool({
+        connectionString: process.env.DATABASE_URL,
+        ssl: { rejectUnauthorized: false }
     });
+
+    pool.connect()
+        .then(client => {
+            console.log("✅ DATABASE CONNECTED");
+            client.release();
+            initDB();
+        })
+        .catch(err => {
+            console.error("❌ DATABASE CONNECTION FAILED:", err.message);
+        });
+} else {
+    console.warn("⚠️ DATABASE_URL not set - running without DB");
+}
 
 /* =========================
    INIT TABLES
 ========================= */
 async function initDB() {
-    await pool.query(`
-        CREATE TABLE IF NOT EXISTS users (
-            id SERIAL PRIMARY KEY,
-            email TEXT UNIQUE,
-            password TEXT,
-            "tenantId" TEXT
-        )
-    `);
+    try {
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS users (
+                id SERIAL PRIMARY KEY,
+                email TEXT UNIQUE,
+                password TEXT,
+                "tenantId" TEXT
+            )
+        `);
 
-    await pool.query(`
-        CREATE TABLE IF NOT EXISTS sessions (
-            token TEXT PRIMARY KEY,
-            "tenantId" TEXT,
-            email TEXT
-        )
-    `);
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS sessions (
+                token TEXT PRIMARY KEY,
+                "tenantId" TEXT,
+                email TEXT
+            )
+        `);
 
-    await pool.query(`
-        CREATE TABLE IF NOT EXISTS incidents (
-            id SERIAL PRIMARY KEY,
-            "tenantId" TEXT,
-            severity TEXT,
-            location TEXT
-        )
-    `);
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS incidents (
+                id SERIAL PRIMARY KEY,
+                "tenantId" TEXT,
+                severity TEXT,
+                location TEXT
+            )
+        `);
 
-    console.log("✅ TABLES READY");
+        console.log("✅ TABLES READY");
+    } catch (err) {
+        console.error("❌ TABLE INIT ERROR:", err.message);
+    }
 }
 
 /* =========================
-   AUTH
+   AUTH MIDDLEWARE
 ========================= */
 async function auth(req, res, next) {
+    if (!pool) return res.status(500).json({ error: "DB not ready" });
+
     const token = req.headers["authorization"];
+    if (!token) return res.status(401).json({ error: "No token provided" });
 
-    if (!token) return res.status(401).json({ error: "No token" });
+    try {
+        const result = await pool.query(
+            "SELECT * FROM sessions WHERE token = $1",
+            [token]
+        );
 
-    const result = await pool.query(
-        "SELECT * FROM sessions WHERE token = $1",
-        [token]
-    );
+        const session = result.rows[0];
 
-    if (!result.rows[0]) {
-        return res.status(401).json({ error: "Invalid session" });
+        if (!session) {
+            return res.status(401).json({ error: "Invalid session" });
+        }
+
+        req.user = session;
+        next();
+    } catch (err) {
+        return res.status(401).json({ error: "Auth failed" });
     }
-
-    req.user = result.rows[0];
-    next();
 }
 
 /* =========================
-   AUTH ROUTES
+   REGISTER
 ========================= */
-
-// REGISTER
 app.post("/register", async (req, res) => {
     const { email, password, tenantId } = req.body;
 
@@ -99,80 +114,80 @@ app.post("/register", async (req, res) => {
 
     try {
         await pool.query(
-            `INSERT INTO users (email, password, "tenantId")
-             VALUES ($1, $2, $3)`,
+            "INSERT INTO users (email, password, \"tenantId\") VALUES ($1, $2, $3)",
             [email, password, tenantId]
         );
 
         res.json({ message: "User created" });
-    } catch {
-        res.status(400).json({ error: "User exists" });
+    } catch (err) {
+        res.status(400).json({ error: "User already exists" });
     }
-});
-
-// LOGIN
-app.post("/login", async (req, res) => {
-    const { email, password } = req.body;
-
-    const result = await pool.query(
-        "SELECT * FROM users WHERE email = $1 AND password = $2",
-        [email, password]
-    );
-
-    const user = result.rows[0];
-
-    if (!user) {
-        return res.status(401).json({ error: "Invalid credentials" });
-    }
-
-    const token = crypto.randomBytes(32).toString("hex");
-
-    await pool.query(
-        `INSERT INTO sessions (token, "tenantId", email)
-         VALUES ($1, $2, $3)`,
-        [token, user.tenantId, user.email]
-    );
-
-    res.json({
-        token,
-        tenantId: user.tenantId
-    });
 });
 
 /* =========================
-   INCIDENT ROUTES
+   LOGIN (FIXED + STABLE)
 ========================= */
+app.post("/login", async (req, res) => {
 
-// CREATE INCIDENT
-app.post("/incident", auth, async (req, res) => {
-    const { severity, location } = req.body;
+    const { email, password } = req.body;
 
-    await pool.query(
-        `INSERT INTO incidents ("tenantId", severity, location)
-         VALUES ($1, $2, $3)`,
-        [req.user.tenantId, severity, location]
-    );
+    if (!pool) {
+        return res.status(500).json({ error: "Database not ready" });
+    }
 
-    res.json({ message: "Incident recorded" });
+    try {
+        const result = await pool.query(
+            "SELECT * FROM users WHERE email = $1 AND password = $2",
+            [email, password]
+        );
+
+        const user = result.rows[0];
+
+        if (!user) {
+            return res.status(401).json({ error: "Invalid credentials" });
+        }
+
+        const token = crypto.randomBytes(32).toString("hex");
+
+        await pool.query(
+            "INSERT INTO sessions (token, \"tenantId\", email) VALUES ($1, $2, $3)",
+            [token, user.tenantId, user.email]
+        );
+
+        res.json({
+            token,
+            tenantId: user.tenantId
+        });
+
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Login failed" });
+    }
 });
 
 /* =========================
    DASHBOARD
 ========================= */
 app.get("/dashboard", auth, async (req, res) => {
-    const result = await pool.query(
-        `SELECT * FROM incidents WHERE "tenantId" = $1`,
-        [req.user.tenantId]
-    );
 
-    const data = result.rows;
+    try {
+        const result = await pool.query(
+            "SELECT * FROM incidents WHERE \"tenantId\" = $1",
+            [req.user.tenantId]
+        );
 
-    res.json({
-        total: data.length,
-        high: data.filter(r => r.severity === "High").length,
-        medium: data.filter(r => r.severity === "Medium").length,
-        low: data.filter(r => r.severity === "Low").length
-    });
+        const data = result.rows;
+
+        res.json({
+            total: data.length,
+            high: data.filter(i => i.severity === "High").length,
+            medium: data.filter(i => i.severity === "Medium").length,
+            low: data.filter(i => i.severity === "Low").length
+        });
+
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
 /* =========================
@@ -180,54 +195,70 @@ app.get("/dashboard", auth, async (req, res) => {
 ========================= */
 app.get("/risk-analysis", auth, async (req, res) => {
 
-    const result = await pool.query(
-        `SELECT * FROM incidents WHERE "tenantId" = $1`,
-        [req.user.tenantId]
-    );
+    try {
+        const result = await pool.query(
+            "SELECT * FROM incidents WHERE \"tenantId\" = $1",
+            [req.user.tenantId]
+        );
 
-    const data = result.rows.map(r => {
+        const output = result.rows.map(r => {
 
-        const severityScore =
-            r.severity === "High" ? 5 :
-            r.severity === "Medium" ? 3 : 1;
+            let severityScore =
+                r.severity === "High" ? 5 :
+                r.severity === "Medium" ? 3 : 1;
 
-        const locationScore =
-            r.location?.includes("Runway") ? 5 :
-            r.location?.includes("Ramp") ? 4 : 2;
+            let locationScore = 2;
+            if (r.location?.includes("Runway")) locationScore = 5;
+            if (r.location?.includes("Ramp")) locationScore = 4;
 
-        const riskIndex = (severityScore * locationScore * 3) / 4;
+            let riskIndex = (severityScore * locationScore * 3) / 4;
 
-        return {
-            location: r.location,
-            severity: r.severity,
-            riskIndex: riskIndex.toFixed(2),
-            predictedRisk: (riskIndex + 2).toFixed(2),
-            level:
-                riskIndex > 20 ? "INTOLERABLE" :
-                riskIndex > 12 ? "HIGH" :
-                riskIndex > 6 ? "MEDIUM" : "LOW"
-        };
-    });
+            let predictedRisk = riskIndex + (r.severity === "High" ? 2 : 0);
 
-    res.json(data);
+            let level = "LOW";
+            if (predictedRisk > 20) level = "INTOLERABLE";
+            else if (predictedRisk > 12) level = "HIGH";
+            else if (predictedRisk > 6) level = "MEDIUM";
+
+            return {
+                location: r.location,
+                severity: r.severity,
+                riskIndex: riskIndex.toFixed(2),
+                predictedRisk: predictedRisk.toFixed(2),
+                level
+            };
+        });
+
+        res.json(output);
+
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
 /* =========================
-   ROOT + HEALTH
+   HEALTH CHECK
+========================= */
+app.get("/health", (req, res) => {
+    res.json({
+        status: "OK",
+        db: pool ? "connected" : "not connected",
+        uptime: process.uptime()
+    });
+});
+
+/* =========================
+   ROOT
 ========================= */
 app.get("/", (req, res) => {
-    res.send("✈️ NEXA SAFETY API RUNNING");
-});
-
-app.get("/health", (req, res) => {
-    res.json({ status: "OK" });
+    res.send("🚀 NEXA SAFETY SYSTEM RUNNING");
 });
 
 /* =========================
-   START SERVER
+   START SERVER (RAILWAY SAFE)
 ========================= */
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, "0.0.0.0", () => {
-    console.log(`🚀 Server running on ${PORT}`);
+    console.log(`🚀 Server running on port ${PORT}`);
 });

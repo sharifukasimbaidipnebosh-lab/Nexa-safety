@@ -1,76 +1,73 @@
-// =========================
-// BASE URL (CRITICAL FIX)
-// =========================
-const BASE_URL = "https://nexa-safety-production.up.railway.app";
+console.log("🔥 NEXA FRONTEND LOADED");
 
-// =========================
-// SECURITY CHECK
-// =========================
+/* =========================
+   AUTH CHECK
+========================= */
 const token = localStorage.getItem("token");
 
-if (!token) {
-    window.location.href = "login.html";
+if (!token && window.location.pathname.includes("dashboard")) {
+    window.location.href = "/login.html";
 }
 
-// Debug (remove later)
-console.log("TOKEN:", token);
+/* =========================
+   BASE HEADERS
+========================= */
+function getHeaders() {
+    return {
+        "Content-Type": "application/json",
+        "Authorization": localStorage.getItem("token")
+    };
+}
 
-// =========================
-// HEADERS
-// =========================
-const headers = {
-    "Content-Type": "application/json",
-    "Authorization": token
-};
-
-// =========================
-// LOGOUT
-// =========================
+/* =========================
+   LOGOUT
+========================= */
 function logout() {
     localStorage.removeItem("token");
     localStorage.removeItem("tenantId");
-    window.location.href = "login.html";
+    window.location.href = "/login.html";
 }
 
-// =========================
-// SAFE FETCH (IMPROVED)
-// =========================
-async function safeFetch(endpoint) {
+/* =========================
+   SAFE API CALL
+========================= */
+async function api(url, options = {}) {
     try {
-        const res = await fetch(BASE_URL + endpoint, {
-            headers
+        const res = await fetch(url, {
+            ...options,
+            headers: {
+                ...getHeaders(),
+                ...(options.headers || {})
+            }
         });
 
         if (!res.ok) {
-            throw new Error(`HTTP ${res.status}`);
+            const errText = await res.text();
+            throw new Error(errText || `HTTP ${res.status}`);
         }
 
         return await res.json();
 
     } catch (err) {
-        console.error("API ERROR:", endpoint, err);
+        console.error("❌ API ERROR:", url, err.message);
         return null;
     }
 }
-// =========================
-// LOAD DASHBOARD
-// =========================
+
+/* =========================
+   LOAD DASHBOARD
+========================= */
 async function loadDashboard() {
 
-    const el = document.getElementById("stats");
-
-    if (!el) return;
-
-    el.innerHTML = "Loading dashboard...";
-
-    const data = await safeFetch("/dashboard");
+    const data = await api("/dashboard");
 
     if (!data) {
-        el.innerHTML = "<p style='color:red'>Failed to load dashboard</p>";
+        document.getElementById("stats").innerHTML =
+            "<p style='color:red'>Failed to load dashboard</p>";
         return;
     }
 
-    el.innerHTML = `
+    document.getElementById("stats").innerHTML = `
         <h3>📊 Total Incidents: ${data.total}</h3>
         <p>🔴 High: ${data.high}</p>
         <p>🟠 Medium: ${data.medium}</p>
@@ -78,26 +75,16 @@ async function loadDashboard() {
     `;
 }
 
-// =========================
-// LOAD RISK ANALYSIS
-// =========================
+/* =========================
+   LOAD RISK ANALYSIS
+========================= */
 async function loadRiskAnalysis() {
 
-    const el = document.getElementById("riskContainer");
-
-    if (!el) return;
-
-    el.innerHTML = "Loading risk analysis...";
-
-    const data = await safeFetch("/risk-analysis");
+    const data = await api("/risk-analysis");
 
     if (!data) {
-        el.innerHTML = "<p style='color:red'>Failed to load risk analysis</p>";
-        return;
-    }
-
-    if (!Array.isArray(data) || data.length === 0) {
-        el.innerHTML = "<p>No incidents found</p>";
+        document.getElementById("riskContainer").innerHTML =
+            "<p style='color:red'>Failed to load risk analysis</p>";
         return;
     }
 
@@ -105,42 +92,64 @@ async function loadRiskAnalysis() {
 
     data.forEach(item => {
 
-        let levelColor = "#22c55e"; // LOW
-        if (item.level === "MEDIUM") levelColor = "#f59e0b";
-        if (item.level === "HIGH") levelColor = "#ef4444";
-        if (item.level === "INTOLERABLE") levelColor = "#dc2626";
+        let levelClass = "";
+        if (item.level === "HIGH") levelClass = "level-high";
+        if (item.level === "MEDIUM") levelClass = "level-medium";
+        if (item.level === "LOW") levelClass = "level-low";
 
         html += `
-            <div class="card" style="border-left: 5px solid ${levelColor}">
+            <div class="card ${levelClass}">
                 <p><b>📍 Location:</b> ${item.location}</p>
                 <p><b>⚠ Severity:</b> ${item.severity}</p>
                 <p><b>📊 Risk Index:</b> ${item.riskIndex}</p>
                 <p><b>🔮 Predicted Risk:</b> ${item.predictedRisk}</p>
                 <p><b>🚦 Level:</b> ${item.level}</p>
             </div>
-            <hr/>
         `;
     });
 
-    el.innerHTML = html;
+    document.getElementById("riskContainer").innerHTML = html;
 }
 
-// =========================
-// INIT (SMART START)
-// =========================
+/* =========================
+   LOGIN FUNCTION (CRITICAL FIX)
+   Use this inside login.html
+========================= */
+async function login(email, password) {
+
+    const res = await fetch("/login", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ email, password })
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+        alert(data.error || "Login failed");
+        return;
+    }
+
+    localStorage.setItem("token", data.token);
+    localStorage.setItem("tenantId", data.tenantId);
+
+    window.location.href = "/dashboard.html";
+}
+
+/* =========================
+   AUTO INIT DASHBOARD
+========================= */
 async function init() {
 
-    console.log("🚀 NEXA Dashboard Initializing...");
+    if (window.location.pathname.includes("dashboard")) {
+        await loadDashboard();
+        await loadRiskAnalysis();
 
-    await loadDashboard();
-    await loadRiskAnalysis();
-
-    // Auto refresh (SaaS behaviour)
-    setInterval(loadDashboard, 60000);
-    setInterval(loadRiskAnalysis, 60000);
+        setInterval(loadDashboard, 60000);
+        setInterval(loadRiskAnalysis, 60000);
+    }
 }
 
-// =========================
-// START
-// =========================
 init();
