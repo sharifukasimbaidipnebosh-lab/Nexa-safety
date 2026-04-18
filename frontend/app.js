@@ -264,7 +264,22 @@ async function loadCharts() {
         });
     }
 }
+async function submitIncident(e) {
+    e.preventDefault();
 
+    const location = document.getElementById("location").value;
+    const severity = document.getElementById("severity").value;
+
+    const res = await api("/incidents", {
+        method: "POST",
+        body: JSON.stringify({ location, severity })
+    });
+
+    if (res) {
+        alert("✅ Incident submitted");
+        window.location.href = "/dashboard.html";
+    }
+}
 /* =========================
    AUTO INIT
 ========================= */

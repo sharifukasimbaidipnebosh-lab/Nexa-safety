@@ -67,6 +67,18 @@
 </div>
 
 <script src="app.js"></script>
+<h2>Report Incident</h2>
 
+<form onsubmit="submitIncident(event)">
+    <input type="text" id="location" placeholder="Location (Runway, Ramp)" required><br><br>
+
+    <select id="severity">
+        <option>Low</option>
+        <option>Medium</option>
+        <option>High</option>
+    </select><br><br>
+
+    <button type="submit">Submit Incident</button>
+</form>
 </body>
 </html>
