@@ -1,68 +1,72 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-    <meta charset="UTF-8">
-    <title>NEXA SAFETY - Executive Dashboard</title>
+<meta charset="UTF-8">
+<title>NEXA SAFETY - Executive AI Dashboard</title>
 
-    <!-- CHART.JS -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-    <style>
-        body {
-            font-family: Arial;
-            background: #0f172a;
-            color: white;
-            margin: 0;
-            padding: 20px;
-        }
+<style>
+body {
+    font-family: Arial;
+    background: #0f172a;
+    color: white;
+    margin: 0;
+    padding: 20px;
+}
 
-        header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
 
-        h1 {
-            color: #38bdf8;
-        }
+h1 { color: #38bdf8; }
 
-        .btn {
-            padding: 10px 15px;
-            border-radius: 6px;
-            border: none;
-            cursor: pointer;
-            margin-left: 5px;
-        }
+.btn {
+    padding: 10px;
+    margin-left: 5px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+}
 
-        .primary { background: #38bdf8; }
-        .logout { background: red; color: white; }
+.primary { background: #38bdf8; }
+.logout { background: red; color: white; }
 
-        .grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 20px;
-            margin-top: 20px;
-        }
+.grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+    gap: 20px;
+    margin-top: 20px;
+}
 
-        .card {
-            background: #1e293b;
-            padding: 20px;
-            border-radius: 10px;
-        }
+.card {
+    background: #1e293b;
+    padding: 15px;
+    border-radius: 10px;
+}
 
-        canvas {
-            max-height: 250px;
-        }
-    </style>
+canvas {
+    max-height: 250px;
+}
+
+.item {
+    padding: 10px;
+    margin-bottom: 8px;
+    background: #0f172a;
+    border-radius: 6px;
+}
+</style>
 </head>
 
 <body>
 
 <header>
-    <h1>✈️ NEXA SAFETY Executive Dashboard</h1>
+    <h1>✈️ NEXA SAFETY AI Command Center</h1>
     <div>
         <button class="btn primary" onclick="goIncident()">➕ Incident</button>
+        <button class="btn primary" onclick="goActions()">🛠 Actions</button>
         <button class="btn logout" onclick="logout()">Logout</button>
     </div>
 </header>
@@ -75,16 +79,34 @@
         <div id="stats"></div>
     </div>
 
-    <!-- PIE CHART -->
+    <!-- PIE -->
     <div class="card">
         <h3>📈 Incident Distribution</h3>
         <canvas id="severityChart"></canvas>
     </div>
 
-    <!-- BAR CHART -->
+    <!-- RISK -->
     <div class="card">
         <h3>⚠ Risk Levels</h3>
         <canvas id="riskChart"></canvas>
+    </div>
+
+    <!-- ACTIONS -->
+    <div class="card">
+        <h3>🛠 Live Actions</h3>
+        <div id="actionsContainer"></div>
+    </div>
+
+    <!-- AI RECOMMENDATIONS -->
+    <div class="card">
+        <h3>🧠 AI Recommendations</h3>
+        <div id="recommendationsContainer"></div>
+    </div>
+
+    <!-- PREDICTIVE -->
+    <div class="card">
+        <h3>🔮 Predictive Risk</h3>
+        <div id="predictiveContainer"></div>
     </div>
 
 </div>
@@ -94,6 +116,10 @@
 <script>
 function goIncident() {
     window.location.href = "/incident.html";
+}
+
+function goActions() {
+    window.location.href = "/actions.html";
 }
 </script>
 

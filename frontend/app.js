@@ -57,7 +57,40 @@ async function api(url, options = {}) {
         return null;
     }
 }
+app.get("/recommendations", auth, async (req, res) => {
 
+    try {
+        const result = await pool.query(
+            'SELECT * FROM recommendations WHERE "tenantId"=$1 ORDER BY created_at DESC',
+            [req.user.tenantId]
+        );
+
+        res.json(result.rows);
+
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+async function loadAIRecommendations() {
+
+    const data = await api("/recommendations");
+
+    if (!data) return;
+
+    let html = "";
+
+    data.forEach(r => {
+        html += `
+            <div class="card">
+                <p><b>⚠ Risk Level:</b> ${r.risk_level}</p>
+                <p><b>🧠 Recommendation:</b> ${r.recommendation}</p>
+                <p><b>🔍 Root Cause:</b> ${r.root_cause}</p>
+            </div>
+        `;
+    });
+
+    document.getElementById("aiContainer").innerHTML = html;
+}
 /* =========================
    LOAD DASHBOARD
 ========================= */
@@ -114,7 +147,65 @@ async function loadRiskAnalysis() {
 
     document.getElementById("riskContainer").innerHTML = html;
 }
+/* =========================
+   LOAD ACTIONS (DASHBOARD)
+========================= */
+async function loadActions() {
 
+    const data = await api("/actions");
+
+    if (!data) {
+        document.getElementById("actionsContainer").innerHTML =
+            "<p style='color:red'>Failed to load actions</p>";
+        return;
+    }
+
+    let html = "<h3>🛠 Action Center</h3>";
+
+    data.forEach(a => {
+        html += `
+            <div class="card">
+                <p><b>Action:</b> ${a.action}</p>
+                <p><b>Priority:</b> ${a.priority}</p>
+                <p><b>Status:</b> ${a.status}</p>
+
+                ${a.status !== "CLOSED" ? `
+                <button onclick="closeAction(${a.id})">
+                    ✅ Close
+                </button>` : ""}
+            </div>
+        `;
+    });
+
+    document.getElementById("actionsContainer").innerHTML = html;
+}
+async function closeAction(id) {
+
+    await api(`/actions/${id}`, {
+        method: "PUT",
+        body: JSON.stringify({ status: "CLOSED" })
+    });
+
+    loadActions();
+}
+async function loadActionsDashboard() {
+    const data = await api("/actions");
+
+    if (!data) return;
+
+    let html = "";
+
+    data.slice(0, 5).forEach(a => {
+        html += `
+            <div class="item">
+                🔥 ${a.priority} - ${a.action}
+                <br>Status: ${a.status}
+            </div>
+        `;
+    });
+
+    document.getElementById("actionsContainer").innerHTML = html;
+}
 /* =========================
    LOGIN FUNCTION
 ========================= */
@@ -264,25 +355,83 @@ async function loadCharts() {
         });
     }
 }
+async function submitIncident(e) {
+    e.preventDefault();
+
+    const location = document.getElementById("location").value;
+    const severity = document.getElementById("severity").value;
+
+    const res = await api("/incidents", {
+        method: "POST",
+        body: JSON.stringify({ location, severity })
+    });
+
+    if (res) {
+        alert("✅ Incident submitted");
+        window.location.href = "/dashboard.html";
+    }
+}
+app.get("/predict-risk", auth, async (req, res) => {
+
+    try {
+        const result = await pool.query(
+            'SELECT * FROM incidents WHERE "tenantId"=$1',
+            [req.user.tenantId]
+        );
+
+        const predictions = predictRiskTrend(result.rows);
+
+        res.json(predictions);
+
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+async function loadPredictions() {
+
+    const data = await api("/predict-risk");
+
+    if (!data) return;
+
+    let html = "";
+
+    data.forEach(p => {
+
+        let color = "#22c55e";
+        if (p.trend.includes("HIGH")) color = "orange";
+        if (p.trend.includes("CRITICAL")) color = "red";
+
+        html += `
+            <div class="card" style="border-left:5px solid ${color}">
+                <p><b>📍 Location:</b> ${p.location}</p>
+                <p><b>📊 Risk Score:</b> ${p.riskScore}</p>
+                <p><b>🔮 Trend:</b> ${p.trend}</p>
+                <p><b>📈 Probability:</b> ${p.probability}</p>
+            </div>
+        `;
+    });
+
+    document.getElementById("predictContainer").innerHTML = html;
+}
 
 /* =========================
    AUTO INIT
 ========================= */
 async function init() {
 
-    const path = window.location.pathname;
-
-    if (path.includes("dashboard")) {
+    if (window.location.pathname.includes("dashboard")) {
         await loadDashboard();
         await loadRiskAnalysis();
-        await loadCharts(); // 👈 ADD THIS
+        await loadActions(); // ✅ ADD THIS
 
-        setInterval(() => {
-            loadDashboard();
-            loadRiskAnalysis();
-            loadCharts(); // 👈 AUTO REFRESH
-        }, 60000);
+        setInterval(loadDashboard, 60000);
+        setInterval(loadRiskAnalysis, 60000);
+        setInterval(loadActions, 60000); // ✅ ADD THIS
     }
 }
+await loadPredictions();
+setInterval(loadPredictions, 60000);
+await loadAIRecommendations();
+setInterval(loadAIRecommendations, 60000);
 // Start app
 init();

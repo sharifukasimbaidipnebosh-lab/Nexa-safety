@@ -1,72 +1,66 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>NEXA Incident Reporting</title>
-    <style>
-        body {
-            font-family: Arial;
-            background: #0b0f19;
-            color: white;
-            padding: 20px;
-        }
+app.post("/incidents", auth, async (req, res) => {
 
-        .container {
-            max-width: 500px;
-            margin: auto;
-            background: #121826;
-            padding: 20px;
-            border-radius: 10px;
-        }
+    const { location, severity } = req.body;
 
-        input, select, button {
-            width: 100%;
-            padding: 10px;
-            margin: 10px 0;
-            border-radius: 5px;
-            border: none;
-        }
+    if (!location || !severity) {
+        return res.status(400).json({ error: "Missing fields" });
+    }
 
-        button {
-            background: gold;
-            font-weight: bold;
-            cursor: pointer;
-        }
+    try {
 
-        h2 {
-            text-align: center;
-        }
+        /* =========================
+           1. SAVE INCIDENT
+        ========================= */
+        const result = await pool.query(
+            `INSERT INTO incidents ("tenantId", severity, location)
+             VALUES ($1, $2, $3)
+             RETURNING id`,
+            [req.user.tenantId, severity, location]
+        );
 
-        .success {
-            color: lightgreen;
-        }
+        const incidentId = result.rows[0].id;
 
-        .error {
-            color: red;
-        }
-    </style>
-</head>
-<body>
+        /* =========================
+           2. ACTION ENGINE (EXISTING)
+        ========================= */
+        const { action, priority } = generateAction(severity, location);
 
-<div class="container">
-    <h2>📋 Report Incident</h2>
+        await pool.query(
+            `INSERT INTO actions ("tenantId", incident_id, action, priority)
+             VALUES ($1, $2, $3, $4)`,
+            [req.user.tenantId, incidentId, action, priority]
+        );
 
-    <input type="text" id="location" placeholder="Location (e.g. Runway A)" />
+        /* =========================
+           3. 🧠 AI RECOMMENDATION ENGINE (NEW)
+        ========================= */
+        const ai = generateRecommendation(severity, location);
 
-    <select id="severity">
-        <option value="">Select Severity</option>
-        <option>Low</option>
-        <option>Medium</option>
-        <option>High</option>
-    </select>
+        await pool.query(
+            `INSERT INTO recommendations
+             ("tenantId", incident_id, risk_level, recommendation, root_cause)
+             VALUES ($1, $2, $3, $4, $5)`,
+            [
+                req.user.tenantId,
+                incidentId,
+                ai.priority,
+                ai.recommendation,
+                ai.rootCause
+            ]
+        );
 
-    <button onclick="submitIncident()">Submit Incident</button>
+        /* =========================
+           4. RESPONSE (FRONTEND + DASHBOARD READY)
+        ========================= */
+        res.json({
+            message: "Incident created + AI recommendation generated",
+            incidentId,
+            action,
+            priority,
+            ai
+        });
 
-    <p id="msg"></p>
-
-    <button onclick="goDashboard()">⬅ Back to Dashboard</button>
-</div>
-
-<script src="app.js"></script>
-
-</body>
-</html>
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
