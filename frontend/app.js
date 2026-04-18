@@ -5,7 +5,11 @@ console.log("🔥 NEXA FRONTEND LOADED");
 ========================= */
 const token = localStorage.getItem("token");
 
-if (!token && window.location.pathname.includes("dashboard")) {
+// Protect dashboard & incident pages
+if (!token && (
+    window.location.pathname.includes("dashboard") ||
+    window.location.pathname.includes("incident")
+)) {
     window.location.href = "/login.html";
 }
 
@@ -112,44 +116,104 @@ async function loadRiskAnalysis() {
 }
 
 /* =========================
-   LOGIN FUNCTION (CRITICAL FIX)
-   Use this inside login.html
+   LOGIN FUNCTION
 ========================= */
 async function login(email, password) {
 
-    const res = await fetch("/login", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ email, password })
-    });
+    try {
+        const res = await fetch("/login", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ email, password })
+        });
 
-    const data = await res.json();
+        const data = await res.json();
 
-    if (!res.ok) {
-        alert(data.error || "Login failed");
+        if (!res.ok) {
+            alert(data.error || "Login failed");
+            return;
+        }
+
+        localStorage.setItem("token", data.token);
+        localStorage.setItem("tenantId", data.tenantId);
+
+        window.location.href = "/dashboard.html";
+
+    } catch (err) {
+        console.error("Login error:", err);
+        alert("Login failed");
+    }
+}
+
+/* =========================
+   SUBMIT INCIDENT
+========================= */
+async function submitIncident() {
+
+    const location = document.getElementById("location").value;
+    const severity = document.getElementById("severity").value;
+    const msg = document.getElementById("msg");
+
+    if (!location || !severity) {
+        msg.innerHTML = "<span style='color:red'>All fields required</span>";
         return;
     }
 
-    localStorage.setItem("token", data.token);
-    localStorage.setItem("tenantId", data.tenantId);
+    try {
+        const res = await fetch("/add-incident", {
+            method: "POST",
+            headers: getHeaders(),
+            body: JSON.stringify({ location, severity })
+        });
 
+        const data = await res.json();
+
+        if (!res.ok) {
+            throw new Error(data.error || "Failed");
+        }
+
+        msg.innerHTML = "<span style='color:lightgreen'>✔ Incident submitted</span>";
+
+        // Clear form
+        document.getElementById("location").value = "";
+        document.getElementById("severity").value = "";
+
+    } catch (err) {
+        console.error(err);
+        msg.innerHTML = "<span style='color:red'>Submission failed</span>";
+    }
+}
+
+/* =========================
+   NAVIGATION
+========================= */
+function goDashboard() {
     window.location.href = "/dashboard.html";
 }
 
 /* =========================
-   AUTO INIT DASHBOARD
+   AUTO INIT
 ========================= */
 async function init() {
 
-    if (window.location.pathname.includes("dashboard")) {
+    const path = window.location.pathname;
+
+    // Dashboard page
+    if (path.includes("dashboard")) {
         await loadDashboard();
         await loadRiskAnalysis();
 
         setInterval(loadDashboard, 60000);
         setInterval(loadRiskAnalysis, 60000);
     }
+
+    // Incident page (no auto-load needed yet)
+    if (path.includes("incident")) {
+        console.log("📋 Incident page ready");
+    }
 }
 
+// Start app
 init();

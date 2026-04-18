@@ -7,19 +7,48 @@
 
     <style>
         body {
-            font-family: Arial;
+            font-family: Arial, sans-serif;
             background: #0f172a;
             color: white;
+            margin: 0;
             padding: 20px;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
 
         h1 {
             color: #38bdf8;
         }
 
+        .btn {
+            padding: 10px 15px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .logout {
+            background: red;
+            color: white;
+        }
+
+        .primary {
+            background: #38bdf8;
+            color: black;
+        }
+
+        .container {
+            margin-top: 20px;
+        }
+
         #stats {
             background: #1e293b;
-            padding: 15px;
+            padding: 20px;
             border-radius: 10px;
             margin-bottom: 20px;
         }
@@ -35,22 +64,6 @@
             border-radius: 10px;
         }
 
-        hr {
-            border: 0.5px solid #334155;
-        }
-
-        button.logout {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            padding: 10px 15px;
-            background: red;
-            color: white;
-            border: none;
-            cursor: pointer;
-            border-radius: 5px;
-        }
-
         .level-high {
             border-left: 5px solid red;
         }
@@ -62,24 +75,54 @@
         .level-low {
             border-left: 5px solid green;
         }
+
+        .actions {
+            margin-top: 15px;
+        }
+
+        .empty {
+            color: #94a3b8;
+            font-style: italic;
+        }
     </style>
 </head>
 
 <body>
 
-    <h1>✈️ NEXA SAFETY SaaS Dashboard</h1>
+    <!-- HEADER -->
+    <header>
+        <h1>✈️ NEXA SAFETY Dashboard</h1>
 
-    <!-- LOGOUT BUTTON -->
-    <button class="logout" onclick="logout()">Logout</button>
+        <div>
+            <button class="btn primary" onclick="goIncident()">➕ Report Incident</button>
+            <button class="btn logout" onclick="logout()">Logout</button>
+        </div>
+    </header>
 
-    <!-- KPI STATS -->
-    <div id="stats"></div>
+    <!-- MAIN CONTENT -->
+    <div class="container">
 
-    <!-- RISK ENGINE OUTPUT -->
-    <div id="riskContainer"></div>
+        <!-- KPI STATS -->
+        <div id="stats">
+            <p class="empty">Loading dashboard...</p>
+        </div>
 
-    <!-- APP SCRIPT -->
-    <script src="app.js"></script>
+        <!-- RISK ENGINE -->
+        <div id="riskContainer">
+            <p class="empty">Loading risk analysis...</p>
+        </div>
+
+    </div>
+
+    <!-- SCRIPT -->
+    <script src="/app.js"></script>
+
+    <!-- NAVIGATION FIX -->
+    <script>
+        function goIncident() {
+            window.location.href = "/incident.html";
+        }
+    </script>
 
 </body>
 

@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>NEXA Incident Reporting</title>
+    <style>
+        body {
+            font-family: Arial;
+            background: #0b0f19;
+            color: white;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 500px;
+            margin: auto;
+            background: #121826;
+            padding: 20px;
+            border-radius: 10px;
+        }
+
+        input, select, button {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            border: none;
+        }
+
+        button {
+            background: gold;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        h2 {
+            text-align: center;
+        }
+
+        .success {
+            color: lightgreen;
+        }
+
+        .error {
+            color: red;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>📋 Report Incident</h2>
+
+    <input type="text" id="location" placeholder="Location (e.g. Runway A)" />
+
+    <select id="severity">
+        <option value="">Select Severity</option>
+        <option>Low</option>
+        <option>Medium</option>
+        <option>High</option>
+    </select>
+
+    <button onclick="submitIncident()">Submit Incident</button>
+
+    <p id="msg"></p>
+
+    <button onclick="goDashboard()">⬅ Back to Dashboard</button>
+</div>
+
+<script src="app.js"></script>
+
+</body>
+</html>
