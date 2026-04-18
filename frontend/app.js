@@ -192,6 +192,78 @@ async function submitIncident() {
 function goDashboard() {
     window.location.href = "/dashboard.html";
 }
+/* =========================
+   EXECUTIVE CHARTS
+========================= */
+
+let severityChart, riskChart;
+
+async function loadCharts() {
+
+    const dashboard = await api("/dashboard");
+    const risks = await api("/risk-analysis");
+
+    if (!dashboard || !risks) return;
+
+    /* =====================
+       PIE CHART (SEVERITY)
+    ===================== */
+    const ctx1 = document.getElementById("severityChart");
+
+    if (ctx1) {
+        if (severityChart) severityChart.destroy();
+
+        severityChart = new Chart(ctx1, {
+            type: "pie",
+            data: {
+                labels: ["High", "Medium", "Low"],
+                datasets: [{
+                    data: [
+                        dashboard.high,
+                        dashboard.medium,
+                        dashboard.low
+                    ]
+                }]
+            }
+        });
+    }
+
+    /* =====================
+       BAR CHART (RISK LEVELS)
+    ===================== */
+    const levelCounts = {
+        HIGH: 0,
+        MEDIUM: 0,
+        LOW: 0
+    };
+
+    risks.forEach(r => {
+        if (levelCounts[r.level] !== undefined) {
+            levelCounts[r.level]++;
+        }
+    });
+
+    const ctx2 = document.getElementById("riskChart");
+
+    if (ctx2) {
+        if (riskChart) riskChart.destroy();
+
+        riskChart = new Chart(ctx2, {
+            type: "bar",
+            data: {
+                labels: ["HIGH", "MEDIUM", "LOW"],
+                datasets: [{
+                    label: "Risk Levels",
+                    data: [
+                        levelCounts.HIGH,
+                        levelCounts.MEDIUM,
+                        levelCounts.LOW
+                    ]
+                }]
+            }
+        });
+    }
+}
 
 /* =========================
    AUTO INIT
@@ -200,20 +272,17 @@ async function init() {
 
     const path = window.location.pathname;
 
-    // Dashboard page
     if (path.includes("dashboard")) {
         await loadDashboard();
         await loadRiskAnalysis();
+        await loadCharts(); // 👈 ADD THIS
 
-        setInterval(loadDashboard, 60000);
-        setInterval(loadRiskAnalysis, 60000);
-    }
-
-    // Incident page (no auto-load needed yet)
-    if (path.includes("incident")) {
-        console.log("📋 Incident page ready");
+        setInterval(() => {
+            loadDashboard();
+            loadRiskAnalysis();
+            loadCharts(); // 👈 AUTO REFRESH
+        }, 60000);
     }
 }
-
 // Start app
 init();
