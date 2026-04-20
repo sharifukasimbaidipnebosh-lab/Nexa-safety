@@ -60,7 +60,31 @@ app.post("/incidents", auth, async (req, res) => {
             ai
         });
 
+<<<<<<< HEAD
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
+=======
+    <p id="msg"></p>
+
+    <button onclick="goDashboard()">⬅ Back to Dashboard</button>
+</div>
+
+<script src="app.js"></script>
+<h2>Report Incident</h2>
+
+<form onsubmit="submitIncident(event)">
+    <input type="text" id="location" placeholder="Location (Runway, Ramp)" required><br><br>
+
+    <select id="severity">
+        <option>Low</option>
+        <option>Medium</option>
+        <option>High</option>
+    </select><br><br>
+
+    <button type="submit">Submit Incident</button>
+</form>
+</body>
+</html>
+>>>>>>> b2a48cece8ab465ede2d7c10be6fc719af070fcd
