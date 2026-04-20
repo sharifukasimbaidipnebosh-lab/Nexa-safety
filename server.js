@@ -20,69 +20,84 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, "frontend")));
 
 /* =========================
-   DATABASE
+   DATABASE (FIXED)
 ========================= */
-const pool = new Pool({
+let pool;
+
+if (!process.env.DATABASE_URL) {
+    console.error("❌ DATABASE_URL missing");
+    process.exit(1);
+}
+
+const isLocal =
+    process.env.DATABASE_URL.includes("localhost") ||
+    process.env.DATABASE_URL.includes("127.0.0.1");
+
+pool = new Pool({
     connectionString: process.env.DATABASE_URL,
-    ssl: { rejectUnauthorized: false }
+    ssl: isLocal ? false : { rejectUnauthorized: false }
 });
 
 /* =========================
    INIT TABLES
 ========================= */
 async function initDB() {
-    await pool.query(`
-        CREATE TABLE IF NOT EXISTS users (
-            id SERIAL PRIMARY KEY,
-            email TEXT UNIQUE,
-            password TEXT,
-            "tenantId" TEXT
-        )
-    `);
+    try {
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS users (
+                id SERIAL PRIMARY KEY,
+                email TEXT UNIQUE,
+                password TEXT,
+                "tenantId" TEXT
+            )
+        `);
 
-    await pool.query(`
-        CREATE TABLE IF NOT EXISTS sessions (
-            token TEXT PRIMARY KEY,
-            "tenantId" TEXT,
-            email TEXT
-        )
-    `);
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS sessions (
+                token TEXT PRIMARY KEY,
+                "tenantId" TEXT,
+                email TEXT
+            )
+        `);
 
-    await pool.query(`
-        CREATE TABLE IF NOT EXISTS incidents (
-            id SERIAL PRIMARY KEY,
-            "tenantId" TEXT,
-            severity TEXT,
-            location TEXT,
-            "createdAt" TIMESTAMP DEFAULT NOW()
-        )
-    `);
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS incidents (
+                id SERIAL PRIMARY KEY,
+                "tenantId" TEXT,
+                severity TEXT,
+                location TEXT,
+                "createdAt" TIMESTAMP DEFAULT NOW()
+            )
+        `);
 
-    await pool.query(`
-        CREATE TABLE IF NOT EXISTS actions (
-            id SERIAL PRIMARY KEY,
-            "tenantId" TEXT,
-            incident_id INT,
-            action TEXT,
-            priority TEXT,
-            status TEXT DEFAULT 'OPEN',
-            created_at TIMESTAMP DEFAULT NOW()
-        )
-    `);
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS actions (
+                id SERIAL PRIMARY KEY,
+                "tenantId" TEXT,
+                incident_id INT,
+                action TEXT,
+                priority TEXT,
+                status TEXT DEFAULT 'OPEN',
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        `);
 
-    await pool.query(`
-        CREATE TABLE IF NOT EXISTS recommendations (
-            id SERIAL PRIMARY KEY,
-            "tenantId" TEXT,
-            incident_id INT,
-            risk_level TEXT,
-            recommendation TEXT,
-            root_cause TEXT,
-            created_at TIMESTAMP DEFAULT NOW()
-        )
-    `);
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS recommendations (
+                id SERIAL PRIMARY KEY,
+                "tenantId" TEXT,
+                incident_id INT,
+                risk_level TEXT,
+                recommendation TEXT,
+                root_cause TEXT,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        `);
 
-    console.log("✅ DB READY");
+        console.log("✅ DATABASE READY");
+    } catch (err) {
+        console.error("DB INIT ERROR:", err);
+    }
 }
 
 initDB();
@@ -123,7 +138,7 @@ function generateAction(severity, location) {
 function generateRecommendation(severity, location) {
     if (severity === "High") {
         return {
-            recommendation: "Stop operation and investigate immediately",
+            recommendation: "Stop operation immediately and investigate",
             rootCause: "Critical unsafe condition",
             priority: "HIGH"
         };
@@ -131,7 +146,7 @@ function generateRecommendation(severity, location) {
 
     if (severity === "Medium") {
         return {
-            recommendation: "Conduct inspection and retrain staff",
+            recommendation: "Inspect and retrain staff",
             rootCause: "Human factors / procedural gap",
             priority: "MEDIUM"
         };
@@ -139,18 +154,16 @@ function generateRecommendation(severity, location) {
 
     return {
         recommendation: "Monitor trend",
-        rootCause: "Minor deviation",
+        rootCause: "Minor issue",
         priority: "LOW"
     };
 }
 
-function predictRiskTrend(incidents) {
+function predictRiskTrend(data) {
     let map = {};
 
-    incidents.forEach(i => {
-        if (!map[i.location]) {
-            map[i.location] = { total: 0, score: 0 };
-        }
+    data.forEach(i => {
+        if (!map[i.location]) map[i.location] = { total: 0, score: 0 };
 
         let score =
             i.severity === "High" ? 5 :
@@ -166,9 +179,10 @@ function predictRiskTrend(incidents) {
         return {
             location: loc,
             riskScore: avg.toFixed(2),
-            trend: avg > 4 ? "CRITICAL" :
-                   avg > 3 ? "HIGH" :
-                   avg > 2 ? "MEDIUM" : "LOW",
+            trend:
+                avg > 4 ? "CRITICAL" :
+                avg > 3 ? "HIGH" :
+                avg > 2 ? "MEDIUM" : "LOW",
             probability: Math.min(95, Math.round(avg * 20)) + "%"
         };
     });
@@ -185,7 +199,6 @@ app.post("/register", async (req, res) => {
             'INSERT INTO users (email,password,"tenantId") VALUES ($1,$2,$3)',
             [email, password, tenantId]
         );
-
         res.json({ message: "User created" });
     } catch {
         res.status(400).json({ error: "User exists" });
@@ -201,7 +214,6 @@ app.post("/login", async (req, res) => {
     );
 
     const user = result.rows[0];
-
     if (!user) return res.status(401).json({ error: "Invalid credentials" });
 
     const token = crypto.randomBytes(32).toString("hex");
@@ -215,40 +227,49 @@ app.post("/login", async (req, res) => {
 });
 
 /* =========================
-   INCIDENT CREATE (AI ENABLED)
+   INCIDENT + ACTION + AI
 ========================= */
 app.post("/incidents", auth, async (req, res) => {
     const { location, severity } = req.body;
 
-    const result = await pool.query(
-        `INSERT INTO incidents ("tenantId", severity, location)
-         VALUES ($1,$2,$3) RETURNING id`,
-        [req.user.tenantId, severity, location]
-    );
+    if (!location || !severity) {
+        return res.status(400).json({ error: "Missing fields" });
+    }
 
-    const incidentId = result.rows[0].id;
+    try {
+        const result = await pool.query(
+            `INSERT INTO incidents ("tenantId", severity, location)
+             VALUES ($1,$2,$3) RETURNING id`,
+            [req.user.tenantId, severity, location]
+        );
 
-    const action = generateAction(severity, location);
-    const rec = generateRecommendation(severity, location);
+        const incidentId = result.rows[0].id;
 
-    await pool.query(
-        `INSERT INTO actions ("tenantId",incident_id,action,priority)
-         VALUES ($1,$2,$3,$4)`,
-        [req.user.tenantId, incidentId, action.action, action.priority]
-    );
+        const action = generateAction(severity, location);
+        const rec = generateRecommendation(severity, location);
 
-    await pool.query(
-        `INSERT INTO recommendations
-         ("tenantId",incident_id,risk_level,recommendation,root_cause)
-         VALUES ($1,$2,$3,$4,$5)`,
-        [req.user.tenantId, incidentId, rec.priority, rec.recommendation, rec.rootCause]
-    );
+        await pool.query(
+            `INSERT INTO actions ("tenantId",incident_id,action,priority)
+             VALUES ($1,$2,$3,$4)`,
+            [req.user.tenantId, incidentId, action.action, action.priority]
+        );
 
-    res.json({
-        message: "Incident + AI generated",
-        action,
-        recommendation: rec
-    });
+        await pool.query(
+            `INSERT INTO recommendations
+             ("tenantId",incident_id,risk_level,recommendation,root_cause)
+             VALUES ($1,$2,$3,$4,$5)`,
+            [req.user.tenantId, incidentId, rec.priority, rec.recommendation, rec.rootCause]
+        );
+
+        res.json({
+            message: "Incident + AI generated",
+            action,
+            recommendation: rec
+        });
+
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
 /* =========================
@@ -335,7 +356,7 @@ app.get("/dashboard", auth, async (req, res) => {
     });
 });
 
-app.get("/predictive-risk", auth, async (req, res) => {
+app.get("/predict-risk", auth, async (req, res) => {
     const result = await pool.query(
         'SELECT * FROM incidents WHERE "tenantId"=$1',
         [req.user.tenantId]
