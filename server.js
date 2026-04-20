@@ -21,23 +21,22 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, "frontend")));
 
 /* =========================
-   DATABASE (FIXED)
+   DATABASE
 ========================= */
 let pool;
 
 if (!process.env.DATABASE_URL) {
-    console.error("❌ DATABASE_URL missing");
-    process.exit(1);
+    console.warn("⚠️  DATABASE_URL is not set — database features will be unavailable until it is provided");
+} else {
+    const isLocal =
+        process.env.DATABASE_URL.includes("localhost") ||
+        process.env.DATABASE_URL.includes("127.0.0.1");
+
+    pool = new Pool({
+        connectionString: process.env.DATABASE_URL,
+        ssl: isLocal ? false : { rejectUnauthorized: false }
+    });
 }
-
-const isLocal =
-    process.env.DATABASE_URL.includes("localhost") ||
-    process.env.DATABASE_URL.includes("127.0.0.1");
-
-pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl: isLocal ? false : { rejectUnauthorized: false }
-});
 
 /* =========================
    INIT TABLES
@@ -374,9 +373,6 @@ app.get("/health", (req, res) => {
 });
 
 /* =========================
-<<<<<<< HEAD
-   START SERVER
-=======
    ROOT
 ========================= */
 app.get("/", (req, res) => {
@@ -390,36 +386,12 @@ app.use((err, req, res, next) => {
     console.error("EXPRESS ERROR:", err);
     res.status(500).json({ error: "Internal server error" });
 });
+
 /* =========================
-   CREATE INCIDENT
-========================= */
-app.post("/incidents", auth, async (req, res) => {
-
-    const { location, severity } = req.body;
-
-    if (!location || !severity) {
-        return res.status(400).json({ error: "Missing fields" });
-    }
-
-    try {
-        await pool.query(
-            `INSERT INTO incidents ("tenantId", severity, location)
-             VALUES ($1, $2, $3)`,
-            [req.user.tenantId, severity, location]
-        );
-
-        res.json({ message: "Incident created" });
-
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-/* =========================
-   START SERVER (RAILWAY)
->>>>>>> b2a48cece8ab465ede2d7c10be6fc719af070fcd
+   START SERVER
 ========================= */
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, "0.0.0.0", () => {
-    console.log(`🚀 Server running on ${PORT}`);
+    console.log(`🚀 Server running on port ${PORT}`);
 });
