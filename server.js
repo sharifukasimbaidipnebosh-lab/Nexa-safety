@@ -95,6 +95,21 @@ async function initDB() {
             )
         `);
 
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS flight_data (
+                id SERIAL PRIMARY KEY,
+                flight_number TEXT NOT NULL,
+                flight_date DATE NOT NULL,
+                pilot_name TEXT NOT NULL,
+                duty_hours NUMERIC(5,2) NOT NULL,
+                fatigue_flag BOOLEAN DEFAULT FALSE,
+                severity_score NUMERIC(4,2),
+                risk_score NUMERIC(4,2),
+                risk_level TEXT,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        `);
+
         console.log("✅ DATABASE READY");
     } catch (err) {
         console.error("DB INIT ERROR:", err);
@@ -374,9 +389,6 @@ app.get("/health", (req, res) => {
 });
 
 /* =========================
-<<<<<<< HEAD
-   START SERVER
-=======
    ROOT
 ========================= */
 app.get("/", (req, res) => {
@@ -390,33 +402,9 @@ app.use((err, req, res, next) => {
     console.error("EXPRESS ERROR:", err);
     res.status(500).json({ error: "Internal server error" });
 });
+
 /* =========================
-   CREATE INCIDENT
-========================= */
-app.post("/incidents", auth, async (req, res) => {
-
-    const { location, severity } = req.body;
-
-    if (!location || !severity) {
-        return res.status(400).json({ error: "Missing fields" });
-    }
-
-    try {
-        await pool.query(
-            `INSERT INTO incidents ("tenantId", severity, location)
-             VALUES ($1, $2, $3)`,
-            [req.user.tenantId, severity, location]
-        );
-
-        res.json({ message: "Incident created" });
-
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-/* =========================
-   START SERVER (RAILWAY)
->>>>>>> b2a48cece8ab465ede2d7c10be6fc719af070fcd
+   START SERVER
 ========================= */
 const PORT = process.env.PORT || 3000;
 
