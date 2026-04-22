@@ -1,0 +1,205 @@
+[33mcommit 43921a63eaa23fe3dc41afff0b02587c14666421[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m
+Author: Sharifu Kasimba <your-sharifukasimbaidipnebosh@gmail.com>
+Date:   Mon May 4 11:39:47 2026 +0400
+
+    Clean repo: removed node_modules and env files
+
+[1mdiff --git a/.env b/.env[m
+[1mnew file mode 100644[m
+[1mindex 0000000..6e4de6c[m
+[1m--- /dev/null[m
+[1m+++ b/.env[m
+[36m@@ -0,0 +1 @@[m
+[32m+[m[32mDATABASE_URL=postgresql://postgres:eoeKVyLCCqcXQDGAeNMjRGGXWYbHEcxO@monorail.proxy.rlwy.net:45224/railway[m
+\ No newline at end of file[m
+[1mdiff --git a/.gitignore b/.gitignore[m
+[1mnew file mode 100644[m
+[1mindex 0000000..3c3629e[m
+[1m--- /dev/null[m
+[1m+++ b/.gitignore[m
+[36m@@ -0,0 +1 @@[m
+[32m+[m[32mnode_modules[m
+[1mdiff --git a/Database/schema b/Database/schema[m
+[1mnew file mode 100644[m
+[1mindex 0000000..db7dcc5[m
+[1m--- /dev/null[m
+[1m+++ b/Database/schema[m
+[36m@@ -0,0 +1,209 @@[m
+[32m+[m[32m/* =========================================================[m
+[32m+[m[32m   🧠 NEXA OS — UNIFIED SCHEMA (UPDATED VERSION)[m
+[32m+[m[32m========================================================= */[m
+[32m+[m
+[32m+[m[32m-- ================================[m
+[32m+[m[32m-- 🟦 AIRLINES[m
+[32m+[m[32m-- ================================[m
+[32m+[m[32mCREATE TABLE airlines ([m
+[32m+[m[32m  id SERIAL PRIMARY KEY,[m
+[32m+[m[32m  name VARCHAR(100),[m
+[32m+[m[32m  code VARCHAR(10),[m
+[32m+[m[32m  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP[m
+[32m+[m[32m);[m
+[32m+[m[32m-- 🏢 TENANTS (AIRLINES)[m
+[32m+[m[32mCREATE TABLE tenants ([m
+[32m+[m[32m  id SERIAL PRIMARY KEY,[m
+[32m+[m[32m  name VARCHAR(100) UNIQUE NOT NULL,[m
+[32m+[m[32m  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP[m
+[32m+[m[32m);[m
+[32m+[m
+[32m+[m[32m-- 👤 USERS[m
+[32m+[m[32mCREATE TABLE users ([m
+[32m+[m[32m  id SERIAL PRIMARY KEY,[m
+[32m+[m[32m  tenant_id INTEGER REFERENCES tenants(id) ON DELETE CASCADE,[m
+[32m+[m[32m  email VARCHAR(100) UNIQUE NOT NULL,[m
+[32m+[m[32m  password_hash TEXT NOT NULL,[m
+[32m+[m[32m  role VARCHAR(20) DEFAULT 'viewer',[m
+[32m+[m[32m  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP[m
+[32m+[m[32m);[m
+[32m+[m[32m-- ================================[m
+[32m+[m[32m-- 🟦 CREW (Shared Layer)[m
+[32m+[m[32m-- ================================[m
+[32m+[m[32mCREATE TABLE crew ([m
+[32m+[m[32m  id SERIAL PRIMARY KEY,[m
+[32m+[m[32m  employee_id VARCHAR(50) UNIQUE,[m
+[32m+[m[32m  name VARCHAR(100),[m
+[32m+[m[32m  role VARCHAR(50),[m
+[32m+[m[32m  airline_id INT REFERENCES airlines(id),[m
+[32m+[m[32m  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP[m
+[32m+[m[32m);[m
+[32m+[m
+[32m+[m[32m-- ================================[m
+[32m+[m[32m-- ✈️ FLIGHTS[m
+[32m+[m[32m-- ================================[m
+[32m+[m[32mCREATE TABLE flights ([m
+[32m+[m[32m  id SERIAL PRIMARY KEY,[m
+[32m+[m[32m  flight VARCHAR(20),[m
+[32m+[m[32m  airline_id INT REFERENCES airlines(id),[m
+[32m+[m[32m  crew_id INT REFERENCES crew(id),[m
+[32m+[m
+[32m+[m[32m  departure VARCHAR(10),[m
+[32m+[m[32m  arrival VARCHAR(10),[m
+[32m+[m
+[32m+[m[32m  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP[m
+[32m+[m[32m);[m
+[32m+[m
+[32m+[m[32m-- ================================[m
+[32m+[m[32m-- 🟦 OPERATIONAL DATA (Layer 1/2)[m
+[32m+[m[32m-- ================================[m
+[32m+[m[32mCREATE TABLE operational_data ([m
+[32m+[m[32m  id SERIAL PRIMARY KEY,[m
+[32m+[m[32m  flight_id INT REFERENCES flights(id),[m
+[32m+[m
+[32m+[m[32m  fatigue_score INT,[m
+[32m+[m[32m  incidents INT,[m
+[32m+[m[32m  maintenance_issues INT,[m
+[32m+[m
+[32m+[m[32m  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP[m
+[32m+[m[32m);[m
+[32m+[m
+[32m+[m[32m-- ================================[m
+[32m+[m[32m-- 🧠 RISK ENGINE OUTPUT (Layer 4)[m
+[32m+[m[32m-- ================================[m
+[32m+[m[32mCREATE TABLE risk_scores ([m
+[32m+[m[32m  id SERIAL PRIMARY KEY,[m
+[32m+[m[32m  flight_id INT REFERENCES flights(id),[m
+[32m+[m
+[32m+[m[32m  fatigue_component INT,[m
+[32m+[m[32m  incident_component INT,[m
+[32m+[m[32m  maintenance_component INT,[m
+[32m+[m
+[32m+[m[32m  total_score INT,[m
+[32m+[m[32m  risk_level VARCHAR(20),[m
+[32m+[m
+[32m+[m[32m  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP[m
+[32m+[m[32m);[m
+[32m+[m
+[32m+[m[32m-- ================================[m
+[32m+[m[32m-- 🔮 PREDICTIONS (Layer 5)[m
+[32m+[m[32m-- ================================[m
+[32m+[m[32mCREATE TABLE predictions ([m
+[32m+[m[32m  id SERIAL PRIMARY KEY,[m
+[32m+[m[32m  flight_id INT REFERENCES flights(id),[m
+[32m+[m
+[32m+[m[32m  predicted_score INT,[m
+[32m+[m[32m  predicted_risk VARCHAR(20),[m
+[32m+[m[32m  horizon VARCHAR(20),[m
+[32m+[m
+[32m+[m[32m  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP[m
+[32m+[m[32m);[m
+[32m+[m
+[32m+[m[32m-- ================================[m
+[32m+[m[32m-- 🚨 ALERTS (Layer 6)[m
+[32m+[m[32m-- ================================[m
+[32m+[m[32mCREATE TABLE alerts ([m
+[32m+[m[32m  id SERIAL PRIMARY KEY,[m
+[32m+[m[32m  flight_id INT REFERENCES flights(id),[m
+[32m+[m
+[32m+[m[32m  type VARCHAR(50),[m
+[32m+[m[32m  severity VARCHAR(20),[m
+[32m+[m[32m  message TEXT,[m
+[32m+[m
+[32m+[m[32m  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP[m
+[32m+[m[32m);[m
+[32m+[m
+[32m+[m[32m-- ================================[m
+[32m+[m[32m-- 🧠 DECISION ENGINE[m
+[32m+[m[32m-- ================================[m
+[32m+[m[32mCREATE TABLE decisions ([m
+[32m+[m[32m  id SERIAL PRIMARY KEY,[m
+[32m+[m[32m  flight_id INT REFERENCES flights(id),[m
+[32m+[m
+[32m+[m[32m  recommendation TEXT,[m
+[32m+[m[32m  priority VARCHAR(20),[m
+[32m+[m
+[32m+[m[32m  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP[m
+[32m+[m[32m);[m
+[32m+[m
+[32m+[m[32m-- ================================[m
+[32m+[m[32m-- 🔍 ROOT CAUSE AI[m
+[32m+[m[32m-- ================================[m
+[32m+[m[32mCREATE TABLE root_causes ([m
+[32m+[m[32m  id SERIAL PRIMARY KEY,[m
+[32m+[m[32m  flight_id INT REFERENCES flights(id),[m
+[32m+[m
+[32m+[m[32m  cause TEXT,[m
+[32m+[m[32m  category VARCHAR(50),[m
+[32m+[m
+[32m+[m[32m  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP[m
+[32m+[m[32m);[m
+[32m+[m
+[32m+[m[32m-- =========================================================[m
+[32m+[m[32m-- 🔴 NEXA MIND — CONFIDENTIAL PSYCHOLOGICAL DATA[m
+[32m+[m[32m-- =========================================================[m
+[32m+[m
+[32m+[m[32mCREATE TABLE psychological_data ([m
+[32m+[m[32m  id SERIAL PRIMARY KEY,[m
+[32m+[m[32m  crew_id INT REFERENCES crew(id),[m
+[32m+[m
+[32m+[m[32m  fatigue_level INT,[m
+[32m+[m[32m  stress_level INT,[m
+[32m+[m[32m  workload_index INT,[m
+[32m+[m[32m  mood_score INT,[m
+[32m+[m[32m  psychological_safety_index INT,[m
+[32m+[m
+[32m+[m[32m  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP[m
+[32m+[m[32m);[m
+[32m+[m
+[32m+[m[32m-- ================================[m
+[32m+[m[32m-- 🧠 MIND AI OUTPUT[m
+[32m+[m[32m-- ================================[m
+[32m+[m[32mCREATE TABLE mind_scores ([m
+[32m+[m[32m  id SERIAL PRIMARY KEY,[m
+[32m+[m[32m  crew_id INT REFERENCES crew(id),[m
+[32m+[m
+[32m+[m[32m  mental_readiness_score INT,[m
+[32m+[m[32m  psychological_risk_level VARCHAR(20),[m
+[32m+[m
+[32m+[m[32m  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP[m
+[32m+[m[32m);[m
+[32m+[m
+[32m+[m[32m-- =========================================================[m
+[32m+[m[32m-- 🧠 UNIFIED INTELLIGENCE (SAFETY + MIND)[m
+[32m+[m[32m-- =========================================================[m
+[32m+[m
+[32m+[m[32mCREATE TABLE unified_risk ([m
+[32m+[m[32m  id SERIAL PRIMARY KEY,[m
+[32m+[m[32m  flight_id INT REFERENCES flight

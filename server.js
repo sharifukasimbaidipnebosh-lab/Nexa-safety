@@ -2,6 +2,7 @@ require("dotenv").config();
 
 const express = require("express");
 const cors = require("cors");
+<<<<<<< HEAD
 const multer = require("multer");
 const csv = require("csv-parser");
 const fs = require("fs");
@@ -21,10 +22,13 @@ const { generateExecutivePDF } = require("./services/pdfReportEngine");
 
 // 🌍 MULTI-TENANT
 const tenantMiddleware = require("./middleware/tenantMiddleware");
+=======
+>>>>>>> 8149678 (Local changes before pulling PR #6)
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+<<<<<<< HEAD
 app.use(tenantMiddleware);
 
 /* ---------------------------------------
@@ -247,3 +251,13 @@ setInterval(async () => {
 app.listen(process.env.PORT || 5000, () => {
   console.log("🚀 NEXA OS RUNNING (MULTI-TENANT)");
 });
+=======
+
+app.use("/api/upload", require("./routes/uploadRoutes"));
+app.use("/api/predictions", require("./routes/predictionRoutes"));
+app.use("/api/alerts", require("./routes/alertRoutes"));
+app.use("/api/dashboard", require("./routes/dashboardRoutes"));
+
+const PORT = 5000;
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+>>>>>>> 8149678 (Local changes before pulling PR #6)
