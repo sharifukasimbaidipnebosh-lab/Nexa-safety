@@ -110,6 +110,21 @@ async function initDB() {
             )
         `);
 
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS flights (
+                id SERIAL PRIMARY KEY,
+                flight_number TEXT NOT NULL,
+                date DATE NOT NULL,
+                pilot_name TEXT NOT NULL,
+                duty_hours NUMERIC(5,2) NOT NULL,
+                rest_hours NUMERIC(5,2) NOT NULL,
+                risk_level TEXT NOT NULL,
+                risk_score NUMERIC(4,2) NOT NULL,
+                prediction JSONB,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        `);
+
         console.log("✅ DATABASE READY");
     } catch (err) {
         console.error("DB INIT ERROR:", err);
