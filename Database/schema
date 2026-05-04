@@ -1,0 +1,209 @@
+/* =========================================================
+   🧠 NEXA OS — UNIFIED SCHEMA (UPDATED VERSION)
+========================================================= */
+
+-- ================================
+-- 🟦 AIRLINES
+-- ================================
+CREATE TABLE airlines (
+  id SERIAL PRIMARY KEY,
+  name VARCHAR(100),
+  code VARCHAR(10),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+-- 🏢 TENANTS (AIRLINES)
+CREATE TABLE tenants (
+  id SERIAL PRIMARY KEY,
+  name VARCHAR(100) UNIQUE NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 👤 USERS
+CREATE TABLE users (
+  id SERIAL PRIMARY KEY,
+  tenant_id INTEGER REFERENCES tenants(id) ON DELETE CASCADE,
+  email VARCHAR(100) UNIQUE NOT NULL,
+  password_hash TEXT NOT NULL,
+  role VARCHAR(20) DEFAULT 'viewer',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+-- ================================
+-- 🟦 CREW (Shared Layer)
+-- ================================
+CREATE TABLE crew (
+  id SERIAL PRIMARY KEY,
+  employee_id VARCHAR(50) UNIQUE,
+  name VARCHAR(100),
+  role VARCHAR(50),
+  airline_id INT REFERENCES airlines(id),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ================================
+-- ✈️ FLIGHTS
+-- ================================
+CREATE TABLE flights (
+  id SERIAL PRIMARY KEY,
+  flight VARCHAR(20),
+  airline_id INT REFERENCES airlines(id),
+  crew_id INT REFERENCES crew(id),
+
+  departure VARCHAR(10),
+  arrival VARCHAR(10),
+
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ================================
+-- 🟦 OPERATIONAL DATA (Layer 1/2)
+-- ================================
+CREATE TABLE operational_data (
+  id SERIAL PRIMARY KEY,
+  flight_id INT REFERENCES flights(id),
+
+  fatigue_score INT,
+  incidents INT,
+  maintenance_issues INT,
+
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ================================
+-- 🧠 RISK ENGINE OUTPUT (Layer 4)
+-- ================================
+CREATE TABLE risk_scores (
+  id SERIAL PRIMARY KEY,
+  flight_id INT REFERENCES flights(id),
+
+  fatigue_component INT,
+  incident_component INT,
+  maintenance_component INT,
+
+  total_score INT,
+  risk_level VARCHAR(20),
+
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ================================
+-- 🔮 PREDICTIONS (Layer 5)
+-- ================================
+CREATE TABLE predictions (
+  id SERIAL PRIMARY KEY,
+  flight_id INT REFERENCES flights(id),
+
+  predicted_score INT,
+  predicted_risk VARCHAR(20),
+  horizon VARCHAR(20),
+
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ================================
+-- 🚨 ALERTS (Layer 6)
+-- ================================
+CREATE TABLE alerts (
+  id SERIAL PRIMARY KEY,
+  flight_id INT REFERENCES flights(id),
+
+  type VARCHAR(50),
+  severity VARCHAR(20),
+  message TEXT,
+
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ================================
+-- 🧠 DECISION ENGINE
+-- ================================
+CREATE TABLE decisions (
+  id SERIAL PRIMARY KEY,
+  flight_id INT REFERENCES flights(id),
+
+  recommendation TEXT,
+  priority VARCHAR(20),
+
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ================================
+-- 🔍 ROOT CAUSE AI
+-- ================================
+CREATE TABLE root_causes (
+  id SERIAL PRIMARY KEY,
+  flight_id INT REFERENCES flights(id),
+
+  cause TEXT,
+  category VARCHAR(50),
+
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- =========================================================
+-- 🔴 NEXA MIND — CONFIDENTIAL PSYCHOLOGICAL DATA
+-- =========================================================
+
+CREATE TABLE psychological_data (
+  id SERIAL PRIMARY KEY,
+  crew_id INT REFERENCES crew(id),
+
+  fatigue_level INT,
+  stress_level INT,
+  workload_index INT,
+  mood_score INT,
+  psychological_safety_index INT,
+
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ================================
+-- 🧠 MIND AI OUTPUT
+-- ================================
+CREATE TABLE mind_scores (
+  id SERIAL PRIMARY KEY,
+  crew_id INT REFERENCES crew(id),
+
+  mental_readiness_score INT,
+  psychological_risk_level VARCHAR(20),
+
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- =========================================================
+-- 🧠 UNIFIED INTELLIGENCE (SAFETY + MIND)
+-- =========================================================
+
+CREATE TABLE unified_risk (
+  id SERIAL PRIMARY KEY,
+  flight_id INT REFERENCES flights(id),
+  crew_id INT REFERENCES crew(id),
+
+  operational_risk INT,
+  psychological_risk INT,
+  combined_risk INT,
+  final_level VARCHAR(20),
+
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ================================
+-- 📊 HISTORICAL SNAPSHOTS
+-- ================================
+CREATE TABLE snapshots (
+  id SERIAL PRIMARY KEY,
+
+  total_flights INT,
+  avg_risk INT,
+  high_risk_count INT,
+
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- =========================================================
+-- ⚡ INDEXES (PERFORMANCE BOOST)
+-- =========================================================
+
+CREATE INDEX idx_flight ON flights(flight);
+CREATE INDEX idx_risk_level ON risk_scores(risk_level);
+CREATE INDEX idx_alert_severity ON alerts(severity);
+CREATE INDEX idx_crew_psych ON psychological_data(crew_id);

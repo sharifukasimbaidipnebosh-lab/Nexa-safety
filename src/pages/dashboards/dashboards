@@ -1,0 +1,57 @@
+import { useEffect, useState } from "react";
+import { decodeToken } from "../utils/decodeToken";
+import { logout } from "../utils/auth";
+
+// Role Dashboards
+import CEODashboard from "./dashboards/CEODashboard";
+import SafetyDashboard from "./dashboards/SafetyDashboard";
+import OpsDashboard from "./dashboards/OpsDashboard";
+
+export default function Dashboard() {
+  const [role, setRole] = useState(null);
+  const [tenant, setTenant] = useState(null);
+
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+
+    if (!token) return logout();
+
+    const decoded = decodeToken(token);
+
+    if (!decoded) return logout();
+
+    setRole(decoded.role);
+    setTenant(decoded.tenantId);
+  }, []);
+
+  const renderDashboard = () => {
+    switch (role) {
+      case "admin":
+        return <CEODashboard />;
+
+      case "safety":
+        return <SafetyDashboard />;
+
+      case "ops":
+        return <OpsDashboard />;
+
+      default:
+        return <p>Unknown role</p>;
+    }
+  };
+
+  return (
+    <div>
+      <h1>🚀 NEXA Command Center</h1>
+
+      <p>Tenant ID: {tenant}</p>
+      <p>Role: {role}</p>
+
+      <button onClick={logout}>Logout</button>
+
+      <hr />
+
+      {renderDashboard()}
+    </div>
+  );
+}
