@@ -4,35 +4,38 @@ require("dotenv").config();
 // Detect environment
 const isProduction = process.env.NODE_ENV === "production";
 
+// ===============================
+// DATABASE POOL CONFIG
+// ===============================
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
 
-  // ✅ Only enable SSL in production (e.g., Railway, Supabase, Render)
+  // 🔐 Secure SSL handling for cloud DB (Render / Railway / Supabase)
   ssl: isProduction
     ? { rejectUnauthorized: false }
     : false,
+
+  // 🧠 Better production stability
+  max: 20,              // max connections
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 10000,
 });
 
-// ✅ Test connection on startup (VERY IMPORTANT)
-pool
-  .connect()
-  .then((client) => {
+// ===============================
+// CONNECTION TEST (SAFE)
+// ===============================
+const testConnection = async () => {
+  try {
+    const client = await pool.connect();
+    const res = await client.query("SELECT NOW()");
     console.log("✅ PostgreSQL Connected");
-
-    // quick test query
-    return client
-      .query("SELECT NOW()")
-      .then((res) => {
-        console.log("🕒 DB Time:", res.rows[0].now);
-        client.release();
-      })
-      .catch((err) => {
-        client.release();
-        console.error("❌ Query Error:", err.message);
-      });
-  })
-  .catch((err) => {
+    console.log("🕒 DB Time:", res.rows[0].now);
+    client.release();
+  } catch (err) {
     console.error("❌ DB Connection Error:", err.message);
-  });
+  }
+};
+
+testConnection();
 
 module.exports = pool;
