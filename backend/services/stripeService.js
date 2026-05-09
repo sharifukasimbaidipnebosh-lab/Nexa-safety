@@ -1,20 +1,18 @@
+// backend/services/stripeService.js
+
 const Stripe = require("stripe");
 
-// Debug (helps you confirm env is loaded)
-console.log("Stripe key loaded:", !!process.env.STRIPE_SECRET_KEY);
+const stripeKey = process.env.STRIPE_SECRET_KEY;
 
-// Safe initialization
-let stripe = null;
-
-if (process.env.STRIPE_SECRET_KEY) {
-  stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
-} else {
+if (!stripeKey) {
   console.warn("⚠️ Stripe not configured — billing disabled");
 }
 
+const stripe = stripeKey ? new Stripe(stripeKey) : null;
+
 const createCheckoutSession = async (tenantId) => {
   if (!stripe) {
-    throw new Error("Stripe is not configured");
+    throw new Error("Stripe not configured");
   }
 
   return await stripe.checkout.sessions.create({
@@ -23,12 +21,12 @@ const createCheckoutSession = async (tenantId) => {
     line_items: [
       {
         price: process.env.STRIPE_PRICE_ID,
-        quantity: 1
-      }
+        quantity: 1,
+      },
     ],
     success_url: "http://localhost:3000/success",
     cancel_url: "http://localhost:3000/cancel",
-    metadata: { tenantId }
+    metadata: { tenantId },
   });
 };
 

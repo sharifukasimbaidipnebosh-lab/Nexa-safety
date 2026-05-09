@@ -1,128 +1,118 @@
-// backend/services/pdfReportEngine.js
+// backend/services/pdfService.js
 
-const PDFDocument = require("pdfkit");
 const fs = require("fs");
+const path = require("path");
+const PDFDocument = require("pdfkit");
 
 /**
- * 🧾 NEXA EXECUTIVE PDF REPORT ENGINE
+ * 🧠 NEXA EXECUTIVE PDF REPORT ENGINE
+ * Generates structured safety intelligence reports
  */
+const generateExecutivePDF = (data = {}) => {
+  const {
+    executiveReport = {},
+    predictions = [],
+    humanProfiles = [],
+    psychProfiles = [],
+    complianceReport = {},
+  } = data;
 
-function generateExecutivePDF({
-  executiveReport,
-  predictions,
-  humanProfiles,
-  psychProfiles,
-  complianceReport,
-  filePath = "nexa-executive-report.pdf"
-}) {
-  const doc = new PDFDocument({ margin: 50 });
+  const filePath = path.join(
+    __dirname,
+    "..",
+    "reports",
+    `nexa-report-${Date.now()}.pdf`
+  );
+
+  // Ensure directory exists
+  const dir = path.dirname(filePath);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+
+  const doc = new PDFDocument({ margin: 40 });
 
   doc.pipe(fs.createWriteStream(filePath));
 
   // =========================
-  // HEADER
+  // TITLE PAGE
   // =========================
-  doc.fontSize(20).text("NEXA OS — EXECUTIVE SAFETY REPORT", {
-    align: "center"
+  doc.fontSize(20).text("NEXA SAFETY INTELLIGENCE REPORT", {
+    align: "center",
   });
 
   doc.moveDown();
-  doc.fontSize(12).text(`Generated: ${new Date().toISOString()}`);
-  doc.moveDown();
+  doc.fontSize(12).text(`Generated: ${new Date().toISOString()}`, {
+    align: "center",
+  });
+
+  doc.moveDown(2);
 
   // =========================
   // EXECUTIVE SUMMARY
   // =========================
   doc.fontSize(16).text("1. Executive Summary");
-  doc.fontSize(12).text(executiveReport.message || "System analysis complete.");
   doc.moveDown();
 
-  doc.text(`Global Risk Score: ${executiveReport.summary?.globalRiskScore || 0}`);
-  doc.text(`Risk Level: ${executiveReport.summary?.riskLevel || "UNKNOWN"}`);
+  doc.fontSize(11).text(
+    executiveReport.summary ||
+      "AI-generated aviation safety intelligence report."
+  );
+
+  doc.moveDown(2);
+
+  // =========================
+  // RISK ANALYSIS
+  // =========================
+  doc.fontSize(16).text("2. Risk Analysis");
   doc.moveDown();
 
-  // =========================
-  // OPERATIONAL RISK
-  // =========================
-  doc.fontSize(16).text("2. Operational Risk (Safety Engine)");
-
-  predictions.slice(0, 5).forEach((p) => {
-    doc.fontSize(12).text(
-      `Flight: ${p.flight} | Risk: ${p.risk} | Score: ${p.score}`
+  predictions.slice(0, 10).forEach((p, i) => {
+    doc.fontSize(11).text(
+      `${i + 1}. Flight ${p.flight || "N/A"} | Risk: ${p.risk || "N/A"} | Score: ${p.score || 0}`
     );
   });
 
+  doc.moveDown(2);
+
+  // =========================
+  // HUMAN FACTORS
+  // =========================
+  doc.fontSize(16).text("3. Human Factors (Psychological Safety)");
   doc.moveDown();
 
-  // =========================
-  // HUMAN FATIGUE RISK
-  // =========================
-  doc.fontSize(16).text("3. Human Performance Risk");
-
-  humanProfiles.slice(0, 5).forEach((h) => {
-    doc.fontSize(12).text(
-      `Flight: ${h.flight} | Fatigue Risk: ${h.errorProbability || 0}%`
+  psychProfiles.slice(0, 10).forEach((p, i) => {
+    doc.fontSize(11).text(
+      `${i + 1}. Flight ${p.flight} | MRS: ${p.mentalReadiness} | PSI: ${p.psychSafety}`
     );
   });
 
-  doc.moveDown();
-
-  // =========================
-  // PSYCHOLOGICAL RISK
-  // =========================
-  doc.fontSize(16).text("4. Psychological Safety (NEXA MIND)");
-
-  psychProfiles.slice(0, 5).forEach((m) => {
-    doc.fontSize(12).text(
-      `Flight: ${m.flight} | Mental Readiness: ${m.mentalReadiness} | PSI: ${m.psychSafety}`
-    );
-  });
-
-  doc.moveDown();
+  doc.moveDown(2);
 
   // =========================
   // COMPLIANCE
   // =========================
-  doc.fontSize(16).text("5. Compliance Status (ICAO / ISO 45003)");
+  doc.fontSize(16).text("4. Compliance Overview");
+  doc.moveDown();
 
-  const violations = complianceReport.filter(
-    (c) => c.status !== "COMPLIANT"
+  doc.fontSize(11).text(
+    complianceReport.summary ||
+      "No compliance anomalies detected in current dataset."
   );
 
-  doc.text(`Total Violations: ${violations.length}`);
-
-  violations.slice(0, 5).forEach((v) => {
-    doc.text(
-      `Flight: ${v.flight} | Status: ${v.status}`
-    );
-  });
-
-  doc.moveDown();
-
-  // =========================
-  // RECOMMENDATIONS
-  // =========================
-  doc.fontSize(16).text("6. Executive Recommendations");
-
-  (executiveReport.recommendations || []).forEach((r) => {
-    doc.fontSize(12).text(`• ${r}`);
-  });
-
-  doc.moveDown();
+  doc.moveDown(2);
 
   // =========================
   // FOOTER
   // =========================
   doc.fontSize(10).text(
-    "NEXA OS — Confidential Executive Intelligence Report",
+    "Generated by NEXA OS – AI Safety Intelligence Platform",
     { align: "center" }
   );
 
   doc.end();
 
   return filePath;
-}
-
-module.exports = {
-  generateExecutivePDF
 };
+
+module.exports = { generateExecutivePDF };

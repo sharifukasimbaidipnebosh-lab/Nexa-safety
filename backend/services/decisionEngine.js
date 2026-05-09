@@ -1,50 +1,17 @@
-function generateDecisions(predictions, forecast) {
-  const decisions = [];
+// backend/services/decisionEngine.js
 
-  predictions.forEach((p) => {
-    let action = "MONITOR";
-    let priority = "LOW";
-    let recommendation = "No immediate action required";
-
-    // 🔴 HIGH RISK
-    if (p.risk === "HIGH") {
-      action = "INTERVENE";
-      priority = "CRITICAL";
-      recommendation =
-        "Reduce duty hours, assign backup crew, increase monitoring";
-    }
-
-    // 🟡 MEDIUM RISK
-    else if (p.risk === "MEDIUM") {
-      action = "MITIGATE";
-      priority = "MEDIUM";
-      recommendation =
-        "Review crew fatigue, adjust schedule, monitor closely";
-    }
-
-    // 🔮 FUTURE RISK CHECK
-    const future = forecast.find((f) => f.flight === p.flight);
-
-    if (future && future.futureRisk === "HIGH") {
-      action = "PREVENT";
-      priority = "HIGH";
-      recommendation =
-        "High future risk predicted — take preventive action now";
-    }
-
-    decisions.push({
+const generateDecisions = (predictions = [], forecast = {}) => {
+  return predictions.map((p) => {
+    return {
       flight: p.flight,
-      airline: p.airline,
-      currentRisk: p.risk,
-      score: p.score,
-      action,
-      priority,
-      recommendation,
-      timestamp: new Date().toISOString()
-    });
+      action:
+        p.score > 70
+          ? "GROUND_FLIGHT"
+          : p.score > 40
+          ? "MONITOR"
+          : "CLEAR",
+    };
   });
-
-  return decisions;
-}
+};
 
 module.exports = { generateDecisions };

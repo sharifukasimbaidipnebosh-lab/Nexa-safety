@@ -1,36 +1,16 @@
-function analyzeRootCause(flightData, risk) {
+// backend/services/rootCauseEngine.js
+
+const analyzeRootCause = (data, risk) => {
   const causes = [];
 
-  // Fatigue-related
-  if (flightData.rest_hours_before_flight < 6) {
-    causes.push("Low rest hours (fatigue risk)");
-  }
-
-  // Incident history
-  if (flightData.incident_type !== "NONE") {
-    causes.push("Recent operational incident detected");
-  }
-
-  // Severity
-  if (flightData.severity_level === "HIGH") {
-    causes.push("High severity operational conditions");
-  }
-
-  // Crew feedback
-  if (flightData.crew_feedback?.includes("Fatigue")) {
-    causes.push("Crew-reported fatigue indicators");
-  }
-
-  // Default fallback
-  if (causes.length === 0) {
-    causes.push("No significant risk contributors identified");
-  }
+  if (data.fatigue_score > 50) causes.push("Fatigue");
+  if (data.incidents > 0) causes.push("Operational Incident");
+  if (data.maintenance_issues > 0) causes.push("Maintenance Issue");
 
   return {
-    riskScore: risk.score,
     riskLevel: risk.level,
-    causes
+    causes: causes.length ? causes : ["Normal Operations"],
   };
-}
+};
 
 module.exports = { analyzeRootCause };

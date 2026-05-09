@@ -2,17 +2,17 @@ const fs = require("fs");
 const csv = require("csv-parser");
 const pool = require("../config/db");
 
-// 🧠 SAFETY ENGINES
+// 🧠 SAFETY ENGINE
 const { standardizeFlightData } = require("../services/dataStandardizer");
 const { calculateRisk } = require("../services/riskEngine");
 
-// 🔴 NEXA MIND ENGINE
+// 🧠 MIND ENGINE
 const { analyzePsychData } = require("../services/mindEngine");
 
 /* =====================================================
-   ✈️ NEXA SAFETY UPLOAD (Layer 1 → 4)
+   🟦 OPERATIONAL UPLOAD (SAFETY MODULE)
 ===================================================== */
-const uploadFile = async (req, res) => {
+const uploadOperational = async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ message: "No file uploaded" });
@@ -32,10 +32,8 @@ const uploadFile = async (req, res) => {
           const inserted = [];
 
           for (let row of rows) {
-            // 1️⃣ CLEAN DATA
             const clean = standardizeFlightData(row);
 
-            // 2️⃣ CREW
             const crewRes = await client.query(
               `INSERT INTO crew (employee_id, name)
                VALUES ($1, $2)
@@ -47,7 +45,6 @@ const uploadFile = async (req, res) => {
 
             const crewId = crewRes.rows[0].id;
 
-            // 3️⃣ AIRLINE
             const airlineRes = await client.query(
               `INSERT INTO airlines (name)
                VALUES ($1)
@@ -68,7 +65,6 @@ const uploadFile = async (req, res) => {
               airlineId = existing.rows[0].id;
             }
 
-            // 4️⃣ FLIGHT
             const flightRes = await client.query(
               `INSERT INTO flights (flight, airline_id, crew_id)
                VALUES ($1, $2, $3)
@@ -78,11 +74,10 @@ const uploadFile = async (req, res) => {
 
             const flightId = flightRes.rows[0].id;
 
-            // 5️⃣ OPERATIONAL DATA
             await client.query(
               `INSERT INTO operational_data
                (flight_id, fatigue_score, incidents, maintenance_issues)
-               VALUES ($1, $2, $3, $4)`,
+               VALUES ($1,$2,$3,$4)`,
               [
                 flightId,
                 clean.fatigue_score || 0,
@@ -91,10 +86,8 @@ const uploadFile = async (req, res) => {
               ]
             );
 
-            // 6️⃣ RISK ENGINE
             const risk = calculateRisk(clean);
 
-            // 7️⃣ STORE RISK
             await client.query(
               `INSERT INTO risk_scores
                (flight_id, fatigue_component, incident_component, maintenance_component, total_score, risk_level)
@@ -117,11 +110,10 @@ const uploadFile = async (req, res) => {
           }
 
           await client.query("COMMIT");
-
           fs.unlinkSync(req.file.path);
 
           res.json({
-            message: "✈️ NEXA SAFETY Upload Complete",
+            message: "✈️ Operational Upload Complete",
             rows: inserted.length,
             preview: inserted.slice(0, 5),
           });
@@ -131,7 +123,7 @@ const uploadFile = async (req, res) => {
           console.error(err);
 
           res.status(500).json({
-            message: "Safety processing failed",
+            message: "Operational processing failed",
             error: err.message,
           });
         } finally {
@@ -147,12 +139,10 @@ const uploadFile = async (req, res) => {
   }
 };
 
-
 /* =====================================================
-   🔴 NEXA MIND UPLOAD (Layer 5)
-   Psychological Data → AI → DB
+   🔴 PSYCHOLOGICAL UPLOAD (NEXA MIND)
 ===================================================== */
-const uploadMindData = async (req, res) => {
+const uploadPsychological = async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ message: "No file uploaded" });
@@ -172,10 +162,8 @@ const uploadMindData = async (req, res) => {
           const inserted = [];
 
           for (let row of rows) {
-            // 🔴 1. AI ANALYSIS
             const psych = analyzePsychData(row);
 
-            // 🔴 2. ENSURE CREW EXISTS
             const crewRes = await client.query(
               `INSERT INTO crew (employee_id, name)
                VALUES ($1, $2)
@@ -187,7 +175,6 @@ const uploadMindData = async (req, res) => {
 
             const crewId = crewRes.rows[0].id;
 
-            // 🔴 3. STORE PSYCHOLOGICAL DATA (CONFIDENTIAL)
             await client.query(
               `INSERT INTO psychological_data
                (crew_id, fatigue_level, stress_level, workload_index, mood_score,
@@ -212,11 +199,10 @@ const uploadMindData = async (req, res) => {
           }
 
           await client.query("COMMIT");
-
           fs.unlinkSync(req.file.path);
 
           res.json({
-            message: "🧠 NEXA MIND Upload Complete",
+            message: "🧠 Psychological Upload Complete",
             rows: inserted.length,
             preview: inserted.slice(0, 5),
           });
@@ -226,7 +212,7 @@ const uploadMindData = async (req, res) => {
           console.error(err);
 
           res.status(500).json({
-            message: "Mind processing failed",
+            message: "Psychological processing failed",
             error: err.message,
           });
         } finally {
@@ -242,8 +228,26 @@ const uploadMindData = async (req, res) => {
   }
 };
 
+/* =====================================================
+   📥 TEMPLATE DOWNLOAD (SIMPLE FIX)
+===================================================== */
+const downloadTemplate = (req, res) => {
+  const type = req.params.type;
+
+  const filePath = require("path").join(
+    __dirname,
+    `../templates/${type}.csv`
+  );
+
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).json({ error: "Template not found" });
+  }
+
+  res.download(filePath);
+};
 
 module.exports = {
-  uploadFile,
-  uploadMindData, // 🔴 NEW EXPORT
+  uploadOperational,
+  uploadPsychological,
+  downloadTemplate,
 };
