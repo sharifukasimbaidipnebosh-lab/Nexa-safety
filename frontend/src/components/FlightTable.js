@@ -1,40 +1,32 @@
 import React from "react";
+import RiskBadge from "./RiskBadge";
 
 const FlightTable = ({ flights }) => {
   return (
-    <div style={{ marginTop: 20 }}>
-      <h2>✈️ Live Flights</h2>
-
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+    <div style={{ marginTop: "20px" }}>
+      <table width="100%" border="1" cellPadding="8">
         <thead>
-          <tr style={{ background: "#111", color: "#fff" }}>
+          <tr>
             <th>Flight</th>
             <th>Airline</th>
-            <th>Status</th>
+            <th>Country</th>
+            <th>Altitude</th>
+            <th>Speed</th>
             <th>Risk</th>
-            <th>Lat</th>
-            <th>Lng</th>
           </tr>
         </thead>
 
         <tbody>
           {flights.map((f) => (
-            <tr key={f.id} style={{ borderBottom: "1px solid #ddd" }}>
+            <tr key={f.id}>
               <td>{f.flight}</td>
               <td>{f.airline}</td>
-              <td>{f.status}</td>
-              <td style={{
-                color:
-                  f.riskLevel === "HIGH"
-                    ? "red"
-                    : f.riskLevel === "MEDIUM"
-                    ? "orange"
-                    : "green"
-              }}>
-                {f.riskLevel}
+              <td>{f.country}</td>
+              <td>{f.altitude}</td>
+              <td>{f.velocity}</td>
+              <td>
+                <RiskBadge risk={f.riskLevel} />
               </td>
-              <td>{f.lat}</td>
-              <td>{f.lng}</td>
             </tr>
           ))}
         </tbody>
